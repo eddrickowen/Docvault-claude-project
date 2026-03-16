@@ -12,7 +12,8 @@ export function DataTableHeader({
   thCls = "py-2 px-2 border-b border-border-default text-xs align-middle",
   stickyL = "sticky left-0 z-[1] shadow-[3px_0_6px_rgba(0,0,0,0.05)] bg-surface-alt",
   stickyR = "sticky right-0 z-[1] shadow-[-3px_0_6px_rgba(0,0,0,0.05)] bg-surface-alt",
-  hasActions = true
+  hasActions = true,
+  getRowIds = (row) => [row.id],
 }) {
 
   const SortIco = ({ col }) => sort.col === col
@@ -25,10 +26,20 @@ export function DataTableHeader({
         <th className={`${thCls} w-9 ${stickyL}`}>
           <input
             type="checkbox"
-            checked={paged.length > 0 && paged.every((p) => bulkSel.has(p.id))}
+            checked={
+              paged.length > 0 &&
+              paged
+                .flatMap((p) => getRowIds(p))
+                .every((id) => bulkSel.has(id))
+            }
             onChange={(e) => {
               const s = new Set(bulkSel);
-              paged.forEach((p) => e.target.checked ? s.add(p.id) : s.delete(p.id));
+              paged.forEach((p) => {
+                getRowIds(p).forEach((id) => {
+                  if (e.target.checked) s.add(id);
+                  else s.delete(id);
+                });
+              });
               setBulkSel(s);
             }}
           />

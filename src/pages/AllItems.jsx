@@ -19,6 +19,14 @@ const stickyR = "sticky right-0 z-[1] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]";
 export function AllItems({ onJump }) {
   const { items, pos, suppliers, dos, zoneTypes, settings, hsDB, updateItem, deleteItem, addSupplier, toast } = usePOStore();
 
+  const poById = useMemo(() => {
+    const map = {};
+    (pos || []).forEach((p) => {
+      map[p.id] = p;
+    });
+    return map;
+  }, [pos]);
+
   const {
     search, setSearch, page, setPage, perPage, setPerPage,
     colF, setColF, dateF, setDateF, numF, setNumF, textF, setTextF,
@@ -36,7 +44,25 @@ export function AllItems({ onJump }) {
     let r = items.filter((i) => {
       if (search) {
         const q = search.toLowerCase();
-        if (!(i.itemName?.toLowerCase().includes(q) || i.desc?.toLowerCase().includes(q) || i.invoiceNo?.toLowerCase().includes(q) || (i.doNos || []).some((d) => d.toLowerCase().includes(q)))) return false;
+        const po = poById[i.poId];
+        const mainSupplier = (i.supplierAssignments || []).find(a => a.role === "main");
+        const mainSupplierName = mainSupplier ? suppliers?.find(s => s.id === mainSupplier.supplierId)?.name : "";
+        const zone = (i.zoneType || po?.zoneType || "");
+        const haystack = [
+          i.itemName,
+          i.desc,
+          i.invoiceNo,
+          ...(i.doNos || []),
+          po?.orderNo,
+          po?.company,
+          zone,
+          i.hsCode,
+          mainSupplierName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
       }
       for (const [col, s] of Object.entries(colF)) {
         if (!s || !s.size) continue;
@@ -44,7 +70,7 @@ export function AllItems({ onJump }) {
         if (col === "status")        v = i.status;
         else if (col === "zoneType") v = i.zoneType || "";
         else if (col === "unit")     v = i.unit;
-        else if (col === "company")  v = pos.find((p) => p.id === i.poId)?.company || "";
+        else if (col === "company")  v = poById[i.poId]?.company || "";
         if (!s.has(v)) return false;
       }
       if (dateF.deliveryDate && !applyDateFilter(i.deliveryDate, dateF.deliveryDate)) return false;
@@ -110,7 +136,7 @@ export function AllItems({ onJump }) {
 
   const getCols = () => (settings?.excelItemCols || DEFAULT_EXCEL_ITEM_COLS).filter((c) => c.enabled);
   const itemRow = (i, cols) => {
-    const po = pos.find((p) => p.id === i.poId);
+    const po = poById[i.poId];
     return cols.map(({ key }) => {
       switch (key) {
         case "itemName":     return i.itemName || "";
@@ -141,7 +167,7 @@ export function AllItems({ onJump }) {
     bulkSel.forEach(id => {
       const i = items.find(x => x.id === id);
       if (!i) return;
-      const po = pos.find(p => p.id === i.poId);
+      const po = poById[i.poId];
       rows.push(cols.map(({ key }) => {
         switch (key) {
           case "itemName": return i.itemName || "";
@@ -184,17 +210,37 @@ export function AllItems({ onJump }) {
   };
 
   const COLS = [
-    { col: "itemName",    label: "Item",       ft: "text", fk: "itemName"     },
-    { col: "qty",         label: "Qty",        ft: "num",  fk: "qty"          },
-    { col: "unitPrice",   label: "Harga",      ft: null                       },
-    { col: "net",         label: "Net",        ft: "num",  fk: "net"          },
-    { col: "status",      label: "Status",     ft: "col",  labelFn: (i) => ITEM_STATUS[i.status]?.label||i.status },
-    { col: "deliveryDate",label: "Delivery",   ft: "date", fk: "deliveryDate" },
-    { col: "invoiceNo",   label: "Invoice",    ft: "text", fk: "invoiceNo"    },
-    { col: "doNos",       label: "DO",         ft: null                       },
-    { col: "zoneType",    label: "Zone",       ft: "col"                      },
-    { col: "company",     label: "Perusahaan", ft: "col",  keyFn: (i) => pos.find((p) => p.id === i.poId)?.company||"", labelFn: (i) => pos.find((p) => p.id === i.poId)?.company||"–" },
-    { col: "margin",      label: "Margin",     ft: "num",  fk: "margin"       },
+    { col: "itemName",    label: "Item",              ft: "text", fk: "itemName"     },
+    { col: "qty",         label: "Qty",               ft: "num",  fk: "qty"          },
+    { col: "unitPrice",   label: "Harga Jual",        ft: null                       },
+    { col: "net",         label: "Net",               ft: "num",  fk: "net"          },
+    {
+      col: "supplier",
+      label: "Supplier Utama",
+      ft: null,
+      keyFn: (i) => {
+        const mainSupplier = (i.supplierAssignments || []).find(a => a.role === "main");
+        return mainSupplier ? suppliers?.find(s => s.id === mainSupplier.supplierId)?.name || "" : "";
+      },
+      labelFn: (i) => {
+        const mainSupplier = (i.supplierAssignments || []).find(a => a.role === "main");
+        const name = mainSupplier ? suppliers?.find(s => s.id === mainSupplier.supplierId)?.name : null;
+        return name || "–";
+      },
+    },
+    { col: "margin",      label: "Margin",            ft: "num",  fk: "margin"       },
+    { col: "status",      label: "Status",            ft: "col",  labelFn: (i) => ITEM_STATUS[i.status]?.label||i.status },
+    { col: "deliveryDate",label: "Delivery",          ft: "date", fk: "deliveryDate" },
+    { col: "invoiceNo",   label: "Invoice",           ft: "text", fk: "invoiceNo"    },
+    { col: "zoneType",    label: "Zone",              ft: "col"                      },
+    {
+      col: "company",
+      label: "PO / Perusahaan",
+      ft: "col",
+      keyFn: (i) => poById[i.poId]?.company || "",
+      labelFn: (i) => poById[i.poId]?.company || "–",
+    },
+    { col: "doNos",       label: "DO",                ft: null                       },
   ];
 
   return (
@@ -232,28 +278,27 @@ export function AllItems({ onJump }) {
       {/* Table */}
       <div className="overflow-x-auto flex-1 w-full">
         <table className="w-full border-collapse min-w-[1100px]">
-          <thead>
-            <tr>
-              <th className={`${thCls} w-8 ${stickyL} bg-surface-alt z-[2]`}>
-                <input
-                  type="checkbox"
-                  checked={paged.filter(r => !r.isGroupRow).length > 0 && paged.filter(r => !r.isGroupRow).every(r => bulkSel.has(r.id))}
-                  onChange={(e) => {
-                    const s = new Set(bulkSel);
-                    paged.forEach(r => {
-                      if (r.isGroupRow) r.items.forEach(i => e.target.checked ? s.add(i.id) : s.delete(i.id));
-                      else e.target.checked ? s.add(r.id) : s.delete(r.id);
-                    });
-                    setBulkSel(s);
-                  }}
-                />
-              </th>
-              {["Item", "Qty", "Harga Jual", "Net", "Supplier Utama", "Margin", "Status", "Delivery", "Invoice", "Zone", "PO / Perusahaan", "DO"].map(h => (
-                <th key={h} className={thCls}>{h}</th>
-              ))}
-              <th className={`${thCls} w-[60px] ${stickyR} bg-surface-alt z-[2]`} />
-            </tr>
-          </thead>
+          <DataTableHeader
+            thCls={thCls}
+            stickyL={stickyL}
+            stickyR={stickyR}
+            cols={COLS}
+            rows={items}
+            paged={paged}
+            bulkSel={bulkSel}
+            setBulkSel={setBulkSel}
+            sort={sort}
+            toggleSort={toggleSort}
+            colF={colF}
+            setColF={setColF}
+            dateF={dateF}
+            setDateF={setDateF}
+            numF={numF}
+            setNumF={setNumF}
+            textF={textF}
+            setTextF={setTextF}
+            getRowIds={(row) => row.isGroupRow ? row.items.map((it) => it.id) : [row.id]}
+          />
           <tbody>
             {!paged.length && <tr><td colSpan={15} className="py-10 text-center text-text-muted">Tidak ada item.</td></tr>}
             {paged.map((rowItem, idx) => {
