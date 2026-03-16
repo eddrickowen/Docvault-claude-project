@@ -61,6 +61,17 @@ export const INIT_SETTINGS = {
   doFields: DEFAULT_DO_FIELDS,
   excelItemCols: DEFAULT_EXCEL_ITEM_COLS,
   excelPOCols: DEFAULT_EXCEL_PO_COLS,
+  itemSearchConfig: {
+    includeItemName: true,
+    includeDescription: true,
+    includeInvoice: true,
+    includeDOs: true,
+    includePONumber: true,
+    includeCompany: true,
+    includeZone: true,
+    includeHSCode: true,
+    includeMainSupplier: true,
+  },
   
   // Organization Details
   vendorName: "PT. API DISTRIBUSI INDONESIA",

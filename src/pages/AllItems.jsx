@@ -43,25 +43,25 @@ export function AllItems({ onJump }) {
   const filtered = useMemo(() => {
     let r = items.filter((i) => {
       if (search) {
+        const cfg = settings?.itemSearchConfig || {};
         const q = search.toLowerCase();
         const po = poById[i.poId];
         const mainSupplier = (i.supplierAssignments || []).find(a => a.role === "main");
         const mainSupplierName = mainSupplier ? suppliers?.find(s => s.id === mainSupplier.supplierId)?.name : "";
         const zone = (i.zoneType || po?.zoneType || "");
-        const haystack = [
-          i.itemName,
-          i.desc,
-          i.invoiceNo,
-          ...(i.doNos || []),
-          po?.orderNo,
-          po?.company,
-          zone,
-          i.hsCode,
-          mainSupplierName,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
+
+        const parts = [];
+        if (cfg.includeItemName !== false) parts.push(i.itemName);
+        if (cfg.includeDescription !== false) parts.push(i.desc);
+        if (cfg.includeInvoice !== false) parts.push(i.invoiceNo);
+        if (cfg.includeDOs !== false) parts.push(...(i.doNos || []));
+        if (cfg.includePONumber !== false) parts.push(po?.orderNo);
+        if (cfg.includeCompany !== false) parts.push(po?.company);
+        if (cfg.includeZone !== false) parts.push(zone);
+        if (cfg.includeHSCode !== false) parts.push(i.hsCode);
+        if (cfg.includeMainSupplier !== false) parts.push(mainSupplierName);
+
+        const haystack = parts.filter(Boolean).join(" ").toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       for (const [col, s] of Object.entries(colF)) {
@@ -79,6 +79,11 @@ export function AllItems({ onJump }) {
       if (numF.margin && !applyNumFilter(itemMargin(i), numF.margin))  return false;
       if (textF.itemName  && !applyTextFilter(i.itemName,  textF.itemName))  return false;
       if (textF.invoiceNo && !applyTextFilter(i.invoiceNo, textF.invoiceNo)) return false;
+      if (textF.poRef) {
+        const po = poById[i.poId];
+        const ref = [po?.orderNo, po?.company].filter(Boolean).join(" ");
+        if (!applyTextFilter(ref, textF.poRef)) return false;
+      }
       return true;
     });
     return [...r].sort((a, b) => {
@@ -236,9 +241,14 @@ export function AllItems({ onJump }) {
     {
       col: "company",
       label: "PO / Perusahaan",
-      ft: "col",
+      ft: "text",
+      fk: "poRef",
       keyFn: (i) => poById[i.poId]?.company || "",
-      labelFn: (i) => poById[i.poId]?.company || "–",
+      labelFn: (i) => {
+        const po = poById[i.poId];
+        if (!po) return "–";
+        return `${po.orderNo || ""} ${po.company || ""}`.trim() || "–";
+      },
     },
     { col: "doNos",       label: "DO",                ft: null                       },
   ];

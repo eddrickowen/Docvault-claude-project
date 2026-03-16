@@ -36,6 +36,17 @@ export function Settings() {
   const [newHsCode, setNewHsCode] = useState("");
   const [newHsDesc, setNewHsDesc] = useState("");
   const [doFields,  setDoFields]  = useState(settings?.doFields || DEFAULT_DO_FIELDS);
+  const [itemSearch, setItemSearch] = useState(settings?.itemSearchConfig || {
+    includeItemName: true,
+    includeDescription: true,
+    includeInvoice: true,
+    includeDOs: true,
+    includePONumber: true,
+    includeCompany: true,
+    includeZone: true,
+    includeHSCode: true,
+    includeMainSupplier: true,
+  });
   const [excelCols, setExcelCols] = useState(() => {
     const saved = settings?.excelItemCols || [];
     const keys  = saved.map((c) => c.key);
@@ -49,7 +60,10 @@ export function Settings() {
 
   useEffect(() => { setLocalHsDB(hsDB); }, [hsDB]);
 
-  const saveSets = () => { saveSettings({ ...s, doFields, excelItemCols: excelCols, excelPOCols }); toast("✓ Settings disimpan"); };
+  const saveSets = () => {
+    saveSettings({ ...s, doFields, excelItemCols: excelCols, excelPOCols, itemSearchConfig: itemSearch });
+    toast("✓ Settings disimpan");
+  };
 
   const handleExport = () => {
     const data = { settings: { ...s, doFields, excelItemCols: excelCols, excelPOCols }, companies: cos, zoneTypes: zones, hsDB: localHsDB };
@@ -166,6 +180,65 @@ export function Settings() {
                     <FF label="Pemisah Desimal" className="flex-1">
                       <FSel value={s.decimalSeparator || ","} onChange={(v) => setS((p) => ({ ...p, decimalSeparator: v }))} options={[ {v: ",", l: 'Koma ( , )'}, {v: ".", l: 'Titik ( . )'} ]} className="font-mono text-sm" />
                     </FF>
+                  </div>
+                  <div className="col-span-2 mt-4">
+                    <div className="text-[13px] font-bold text-text-primary mb-2">Pencarian Global di Halaman All Items</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Toggle
+                        checked={itemSearch.includeItemName}
+                        onChange={(v) => setItemSearch((p) => ({ ...p, includeItemName: v }))}
+                        label="Nama Item"
+                        hint="Termasuk nama item dalam pencarian"
+                      />
+                      <Toggle
+                        checked={itemSearch.includeDescription}
+                        onChange={(v) => setItemSearch((p) => ({ ...p, includeDescription: v }))}
+                        label="Deskripsi Item"
+                        hint="Termasuk kolom deskripsi"
+                      />
+                      <Toggle
+                        checked={itemSearch.includeInvoice}
+                        onChange={(v) => setItemSearch((p) => ({ ...p, includeInvoice: v }))}
+                        label="Nomor Invoice"
+                        hint="Cari berdasarkan invoice"
+                      />
+                      <Toggle
+                        checked={itemSearch.includeDOs}
+                        onChange={(v) => setItemSearch((p) => ({ ...p, includeDOs: v }))}
+                        label="Nomor DO"
+                        hint="Termasuk semua DO terkait item"
+                      />
+                      <Toggle
+                        checked={itemSearch.includePONumber}
+                        onChange={(v) => setItemSearch((p) => ({ ...p, includePONumber: v }))}
+                        label="Nomor PO"
+                        hint="Cari berdasarkan nomor PO induk"
+                      />
+                      <Toggle
+                        checked={itemSearch.includeCompany}
+                        onChange={(v) => setItemSearch((p) => ({ ...p, includeCompany: v }))}
+                        label="Nama Perusahaan"
+                        hint="Client / perusahaan PO"
+                      />
+                      <Toggle
+                        checked={itemSearch.includeZone}
+                        onChange={(v) => setItemSearch((p) => ({ ...p, includeZone: v }))}
+                        label="Zone Type"
+                        hint="Termasuk zona pengiriman (item / PO)"
+                      />
+                      <Toggle
+                        checked={itemSearch.includeHSCode}
+                        onChange={(v) => setItemSearch((p) => ({ ...p, includeHSCode: v }))}
+                        label="HS Code"
+                        hint="Cari berdasarkan HS Code item"
+                      />
+                      <Toggle
+                        checked={itemSearch.includeMainSupplier}
+                        onChange={(v) => setItemSearch((p) => ({ ...p, includeMainSupplier: v }))}
+                        label="Supplier Utama"
+                        hint="Termasuk nama supplier utama"
+                      />
+                    </div>
                   </div>
                 </FGrid>
               </div>

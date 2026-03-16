@@ -7,6 +7,8 @@ import {
   uid, today, getQtyDel, getQtyRem, fmtDate, formatDO, nextDOSeq,
 } from "../../lib/helpers";
 import { DEFAULT_DO_FIELDS } from "../../lib/constants";
+import { DOPrintTemplate } from "./DOPrintTemplate";
+import { usePOStore } from "../../store/usePOStore";
 
 const thCls = "p-[8px] text-[11px] font-bold bg-surface-alt uppercase tracking-[.05em] border-b-2 border-border-strong text-left whitespace-nowrap";
 const tdCls = "p-[7px_8px] text-[13px] border-b border-border-default";
@@ -16,6 +18,7 @@ const tdCls = "p-[7px_8px] text-[13px] border-b border-border-default";
  * Includes a print-ready layout rendered off-screen.
  */
 export function DOGeneratorModal({ po, preSelect = new Set(), items, dos, settings, onClose, onSaveDO }) {
+  const { settings: storeSettings } = usePOStore();
   const poItems = items.filter((i) => i.poId === po.id);
   const fields = (settings.doFields || DEFAULT_DO_FIELDS).filter((f) => f.enabled);
 
@@ -58,11 +61,13 @@ export function DOGeneratorModal({ po, preSelect = new Set(), items, dos, settin
     onClose();
   };
 
+  const [previewDO, setPreviewDO] = useState(null);
+
   const handlePrintSave = () => {
     if (!sel.length) return;
-    onSaveDO(buildDO());
-    setTimeout(() => window.print(), 200);
-    setTimeout(() => onClose(), 300);
+    const built = buildDO();
+    onSaveDO(built);
+    setPreviewDO(built);
   };
 
   return (
@@ -164,108 +169,49 @@ export function DOGeneratorModal({ po, preSelect = new Set(), items, dos, settin
             <Ico d={IC.save} size={12} /> Simpan Saja
           </Btn>
           <Btn onClick={handlePrintSave} disabled={!sel.length}>
-            <Ico d={IC.print} size={12} /> Simpan & Cetak
+            <Ico d={IC.print} size={12} /> Simpan &amp; Preview Cetak
           </Btn>
         </div>
       </div>
 
-      {/* PRINT AREA */}
-      {createPortal(
-        <div
-          id="pa"
-        style={{
-          display: "none",
-          background: "#fff",
-          color: "#111",
-          fontFamily: "Arial,sans-serif",
-          padding: "18mm 16mm 12mm",
-          minHeight: "auto",
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 14, marginBottom: 16, borderBottom: "3px solid #1e3a5f" }}>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: "#1e3a5f" }}>{po.vendorName || "PT. API DISTRIBUSI INDONESIA"}</div>
-            <div style={{ fontSize: 10, color: "#6b7280", marginTop: 2 }}>{po.vendorAddr || ""}</div>
-            <div style={{ fontSize: 10, color: "#6b7280" }}>{po.vendorContact || ""}</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 18, fontWeight: 900, color: "#1e3a5f", letterSpacing: ".05em" }}>SURAT JALAN</div>
-            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "monospace", color: "#374151", marginTop: 2 }}>{form.doNo}</div>
-            <div style={{ fontSize: 10, color: "#6b7280", marginTop: 2 }}>Tgl: {fmtDate(form.deliveryDate)}</div>
-          </div>
-        </div>
-
-        {/* Recipient + fields */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
-          <div style={{ background: "#f9fafb", borderRadius: 6, padding: "12px 14px", border: "1px solid #e5e7eb" }}>
-            <div style={{ fontSize: 8, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 5 }}>Kepada</div>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>{po.company}</div>
-            <div style={{ fontSize: 10, color: "#6b7280", marginTop: 3 }}>Ref PO: {po.orderNo}</div>
-          </div>
-          <div style={{ background: "#f9fafb", borderRadius: 6, padding: "12px 14px", border: "1px solid #e5e7eb" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <tbody>
-                {fields.filter((f) => form.fieldValues[f.key]).map((f) => (
-                  <tr key={f.key}>
-                    <td style={{ fontSize: 9, color: "#6b7280", padding: "2px 0", width: 65 }}>{f.label}</td>
-                    <td style={{ fontSize: 9, padding: "2px 3px" }}>:</td>
-                    <td style={{ fontSize: 10, fontWeight: 600 }}>{form.fieldValues[f.key]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Items table */}
-        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14 }}>
-          <thead>
-            <tr>
-              {["No.", "Nama Barang", "Keterangan", "HS Code", "Qty", "Satuan", "Catatan"].map((h) => (
-                <th key={h} style={{ padding: "7px 8px", fontSize: 9, fontWeight: 700, background: "#f3f4f6", textTransform: "uppercase", letterSpacing: ".05em", borderBottom: "2px solid #d1d5db", textAlign: "left" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sel.map((line, idx) => {
-              const item = items.find((i) => i.id === line.itemId);
-              return (
-                <tr key={line.itemId} style={{ background: idx % 2 === 0 ? "#fff" : "#f9fafb" }}>
-                  <td style={{ padding: "7px 8px", fontSize: 10, textAlign: "center", borderBottom: "1px solid #e5e7eb" }}>{idx + 1}</td>
-                  <td style={{ padding: "7px 8px", fontSize: 10, fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>{item?.itemName}</td>
-                  <td style={{ padding: "7px 8px", fontSize: 9, color: "#6b7280", borderBottom: "1px solid #e5e7eb" }}>{item?.desc || "–"}</td>
-                  <td style={{ padding: "7px 8px", fontSize: 9, fontFamily: "monospace", borderBottom: "1px solid #e5e7eb" }}>{line.hsCode || "–"}</td>
-                  <td style={{ padding: "7px 8px", fontSize: 12, fontWeight: 700, textAlign: "center", borderBottom: "1px solid #e5e7eb" }}>{line.qtyDelivered}</td>
-                  <td style={{ padding: "7px 8px", fontSize: 10, borderBottom: "1px solid #e5e7eb" }}>{item?.unit}</td>
-                  <td style={{ padding: "7px 8px", fontSize: 9, color: "#6b7280", borderBottom: "1px solid #e5e7eb" }}>{line.notes || "–"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {form.fieldValues?.remarks && (
-          <div style={{ background: "#fffbeb", borderRadius: 6, padding: "9px 13px", border: "1px solid #fde68a", fontSize: 10, color: "#92400e", marginBottom: 16 }}>
-            <strong>Keterangan:</strong> {form.fieldValues.remarks}
-          </div>
-        )}
-
-        {/* Signature blocks */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16, marginTop: 32 }}>
-          {["Pengirim", "Pengemudi", "Penerima", "Mengetahui"].map((l) => (
-            <div key={l} style={{ textAlign: "center" }}>
-              <div style={{ borderBottom: "1px solid #9ca3af", height: 44, marginBottom: 6 }} />
-              <div style={{ fontSize: 9, color: "#6b7280", fontWeight: 700 }}>{l}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid #e5e7eb", fontSize: 8, color: "#9ca3af", textAlign: "center" }}>
-          Dicetak · {form.doNo} · {new Date().toLocaleString("id-ID")}
-        </div>
-      </div>,
-      document.body
-    )}
+      {previewDO && (
+        <>
+          <DOPrintTemplate
+            doData={previewDO}
+            po={po}
+            items={items}
+            vendorName={storeSettings.vendorName}
+            vendorAddr={storeSettings.vendorAddr}
+            vendorContact={storeSettings.vendorContact}
+          />
+          {createPortal(
+            <Modal
+              open
+              onClose={() => setPreviewDO(null)}
+              title={`Preview Surat Jalan ${previewDO.doNo}`}
+              wide
+            >
+              <div className="text-[11px] text-text-muted mb-3">
+                Preview layout akan ikut tercetak saat Anda membuka dialog print (Ctrl+P).
+              </div>
+              <div className="flex justify-end gap-2">
+                <Btn variant="secondary" onClick={() => setPreviewDO(null)}>
+                  Tutup Preview
+                </Btn>
+                <Btn
+                  variant="blue"
+                  onClick={() => {
+                    window.print();
+                  }}
+                >
+                  <Ico d={IC.print} size={12} /> Buka Dialog Print
+                </Btn>
+              </div>
+            </Modal>,
+            document.body
+          )}
+        </>
+      )}
     </Modal>
   );
 }
