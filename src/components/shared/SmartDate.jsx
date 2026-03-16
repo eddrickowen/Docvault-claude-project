@@ -1,0 +1,56 @@
+import { useState, useRef } from "react";
+import { Ico, IC } from "../ui";
+import { fmtDate, parseSmartDate } from "../../lib/helpers";
+
+const inputCls =
+  "w-full bg-surface border border-border-strong rounded-[7px] px-2 py-1 text-[11px] text-text-primary outline-none focus:border-brand font-[JetBrains_Mono,monospace]";
+
+/**
+ * SmartDate — hybrid text input + native date picker
+ * Accepts DD/MM/YY, DD.MM.YYYY, YYYY-MM-DD etc.
+ */
+export function SmartDate({ value, onChange, placeholder, className }) {
+  const [raw, setRaw] = useState("");
+  const [focused, setFocused] = useState(false);
+  const pickerRef = useRef();
+
+  const display = focused ? raw : value ? fmtDate(value) : "";
+
+  return (
+    <div className="relative flex items-center gap-0">
+      <input
+        value={display}
+        onChange={(e) => setRaw(e.target.value)}
+        onFocus={() => {
+          setFocused(true);
+          setRaw(value || "");
+          setTimeout((e) => e && e.select(), 0);
+        }}
+        onBlur={() => {
+          setFocused(false);
+          const p = parseSmartDate(raw);
+          if (p) onChange(p);
+          else if (!raw.trim()) onChange("");
+          setRaw("");
+        }}
+        placeholder={focused ? "DD/MM/YY atau YYYY-MM-DD" : placeholder || "Pilih tanggal..."}
+        className={`${inputCls} pr-[30px] ${className || ""}`}
+      />
+      <button
+        type="button"
+        onClick={() => pickerRef.current?.showPicker?.() || pickerRef.current?.click()}
+        className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-text-muted flex p-0.5"
+        title="Buka kalender"
+      >
+        <Ico d={IC.cal} size={14} color={focused ? "var(--color-brand)" : "var(--color-text-muted)"} />
+      </button>
+      <input
+        ref={pickerRef}
+        type="date"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute right-0 top-0 opacity-0 w-[30px] h-full border-none cursor-pointer -z-[1]"
+      />
+    </div>
+  );
+}

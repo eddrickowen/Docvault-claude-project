@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(npm ls:*)",
+      "Bash(npx vite:*)",
+      "Bash(find c:/Users/Eddri/Music/docvault/src -name *icon* -o -name *IC*)",
+      "Bash(grep -n \"const IC\" c:/Users/Eddri/Music/docvault/src/*.jsx)",
+      "Bash(mv useConfirm.js useConfirm.jsx)",
+      "Bash(mv useToast.js useToast.jsx)",
+      "Bash(grep -r text-[ c:UsersEddriMusicdocvaultsrc --include=*.jsx)",
+      "Bash(grep -r \"text-xs\\\\|text-sm\\\\|text-base\\\\|text-lg\\\\|text-xl\" c:UsersEddriMusicdocvaultsrc --include=*.jsx)",
+      "Bash(ls /c/Users/Eddri/Music/docvault/tailwind.*)",
+      "Bash(grep -E '\\\\.\\(jsx?|css\\)$')",
+      "Bash(find c:UsersEddriMusicdocvault -maxdepth 1 -type f \\\\\\(-name *.config.* -o -name *.json -o -name *.md \\\\\\))"
+    ]
+  }
+}

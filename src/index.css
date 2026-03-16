@@ -1,0 +1,319 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+/* ── Custom theme tokens (maps old C object to CSS variables) ── */
+@theme {
+  /* ── Core palette ── */
+  --color-surface: #ffffff;
+  --color-surface-alt: #f8fafc;
+  --color-bg-app: #f0f4f8;
+  --color-border-default: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  --color-brand: #2563eb;
+  --color-brand-hover: #1d4ed8;
+  --color-brand-soft: #eff6ff;
+  --color-brand-mid: #dbeafe;
+  --color-amber: #d97706;
+  --color-amber-soft: #fffbeb;
+  --color-amber-mid: #fde68a;
+  --color-green: #059669;
+  --color-green-soft: #f0fdf4;
+  --color-green-mid: #d1fae5;
+  --color-red: #dc2626;
+  --color-red-soft: #fef2f2;
+  --color-red-mid: #fecaca;
+  --color-orange: #ea580c;
+  --color-orange-soft: #fff7ed;
+  --color-orange-mid: #fed7aa;
+  --color-orange-dark: #c2410c;
+  --color-purple: #7c3aed;
+  --color-purple-soft: #f5f3ff;
+
+  /* ── Semantic aliases (DRY naming) ── */
+  --color-app-bg: #f0f4f8;
+  --color-surface-2: #f8fafc;
+  --color-border-main: #e2e8f0;
+  --color-border-dark: #cbd5e1;
+  --color-text-main: #0f172a;
+  --color-text-light: #94a3b8;
+  --color-primary: #2563eb;
+  --color-primary-soft: #eff6ff;
+  --color-primary-mid: #dbeafe;
+  --color-success: #059669;
+  --color-success-soft: #f0fdf4;
+  --color-success-mid: #d1fae5;
+  --color-warning: #d97706;
+  --color-warning-soft: #fffbeb;
+  --color-warning-mid: #fde68a;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2;
+  --color-danger-mid: #fecaca;
+
+  /* ── Shadows ── */
+  --shadow-card: 0 1px 3px rgba(15,23,42,.08), 0 1px 2px rgba(15,23,42,.04);
+  --shadow-modal: 0 8px 32px rgba(15,23,42,.18);
+}
+
+/* ── Base ── */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: none !important;
+}
+body {
+  background: var(--color-bg-app);
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+input, select, textarea {
+  color: var(--color-text-primary) !important;
+  font-family: 'Inter', sans-serif;
+}
+button { font-family: 'Inter', sans-serif; }
+input[type=checkbox] { accent-color: var(--color-brand); width: 14px; height: 14px; cursor: pointer; }
+input[type=date] { color-scheme: light; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--color-bg-app); }
+::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 4px; }
+
+/* ── Animations ── */
+@keyframes rowFlash { 0%,100% { background: transparent } 35% { background: var(--color-brand-mid) } }
+.row-hl { animation: rowFlash 1.8s ease; }
+
+/* ── Print ── */
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #root, #sb, #tb, .np { display: none !important; }
+  #pa { display: block !important; position: absolute; left: 0; top: 0; background: #fff; z-index: 99999; width: 100%; margin: 0; padding: 0; }
+  @page { size: 9.5in 5.5in; margin: 0; }
+}
+
+/* Print and modal area styles */
+.do-print-area {
+  display: none;
+  background: #fff;
+  color: #111;
+  font-family: Arial, sans-serif;
+  padding: 18mm 16mm 12mm;
+  min-height: 297mm;
+}
+.do-print-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 3px solid #1e3a5f;
+}
+.do-print-vendor {
+  font-size: 20px;
+  font-weight: 900;
+  color: #1e3a5f;
+}
+.do-print-vendor-addr,
+.do-print-vendor-contact {
+  font-size: 10px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+.do-print-header-right {
+  text-align: right;
+}
+.do-print-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: #1e3a5f;
+  letter-spacing: .05em;
+}
+.do-print-no {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: monospace;
+  color: #374151;
+  margin-top: 2px;
+}
+.do-print-date {
+  font-size: 10px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+.do-print-recipient-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.do-print-recipient,
+.do-print-fields {
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+}
+.do-print-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.do-print-company {
+  font-size: 13px;
+  font-weight: 700;
+}
+.do-print-ref {
+  font-size: 10px;
+  color: #6b7280;
+  margin-top: 3px;
+}
+.do-print-fields-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.do-print-field-label {
+  font-size: 9px;
+  color: #6b7280;
+  padding: 2px 0;
+  width: 65px;
+}
+.do-print-field-sep {
+  font-size: 9px;
+  padding: 2px 3px;
+}
+.do-print-field-value {
+  font-size: 10px;
+  font-weight: 600;
+}
+.do-print-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 14px;
+}
+.do-print-items-th {
+  padding: 7px 8px;
+  font-size: 9px;
+  font-weight: 700;
+  background: #f3f4f6;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  border-bottom: 2px solid #d1d5db;
+  text-align: left;
+}
+.do-print-items-tr-even {
+  background: #fff;
+}
+.do-print-items-tr-odd {
+  background: #f9fafb;
+}
+.do-print-items-td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.do-print-items-td-no {
+  font-size: 10px;
+  text-align: center;
+}
+.do-print-items-td-name {
+  font-size: 10px;
+  font-weight: 600;
+}
+.do-print-items-td-desc {
+  font-size: 9px;
+  color: #6b7280;
+}
+.do-print-items-td-hscode {
+  font-size: 9px;
+  font-family: monospace;
+}
+.do-print-items-td-qty {
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+.do-print-items-td-unit {
+  font-size: 10px;
+}
+.do-print-items-td-notes {
+  font-size: 9px;
+  color: #6b7280;
+}
+.do-print-remarks {
+  background: #fffbeb;
+  border-radius: 6px;
+  padding: 9px 13px;
+  border: 1px solid #fde68a;
+  font-size: 10px;
+  color: #92400e;
+  margin-bottom: 16px;
+}
+.do-print-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 16px;
+  margin-top: 32px;
+}
+.do-print-signature-block {
+  text-align: center;
+}
+.do-print-signature-line {
+  border-bottom: 1px solid #9ca3af;
+  height: 44px;
+  margin-bottom: 6px;
+}
+.do-print-signature-label {
+  font-size: 9px;
+  color: #6b7280;
+  font-weight: 700;
+}
+.do-print-footer {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 8px;
+  color: #9ca3af;
+  text-align: center;
+}
+/* Extra classes for modal table */
+.grid-cols-auto-fill-180 {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+.min-w-850 {
+  min-width: 850px;
+}
+.sticky-left {
+  position: sticky;
+  left: 0;
+  background: var(--color-surface-alt);
+  z-index: 2;
+  box-shadow: 3px 0 6px rgba(0,0,0,0.05);
+}
+.print-row-selected {
+  background: #eff6ff;
+}
+.print-row-even {
+  background: #fff;
+}
+.print-row-odd {
+  background: #fafbfc;
+}
+.print-table-checkbox {
+  width: 36px;
+}
+.print-qty-delivered {
+  color: var(--color-green);
+}
+.print-qty-remaining {
+  color: var(--color-brand);
+}
+.print-notes-input {
+  width: 110px;
+}

@@ -1,0 +1,242 @@
+import { PPN_RATE, CSV_PO_ST, CSV_IT_ST } from "./constants";
+import { usePOStore } from "../store/usePOStore";
+
+/* ── ID & Date ── */
+export const uid = () => "x" + Math.random().toString(36).slice(2, 9);
+export const today = () => new Date().toISOString().slice(0, 10);
+export const diffDays = (d) => (d ? Math.floor((Date.now() - new Date(d)) / 864e5) : -1);
+
+/* ── PO Checks ── */
+export const isOverdue = (p, days = 7) =>
+  ["pending", "confirmed"].includes(p.status) && p.orderDate && diffDays(p.orderDate) > days;
+export const isIncompletePO = (p) =>
+  !p.orderNo || !p.orderNo.trim() || p.orderNo.trim() === "Order" ||
+  !p.orderDate || p.orderDate === "dd/mm/yyyy" || !p.company || !p.company.trim();
+
+/* ── Parsing ── */
+export const parseIDR = (s) => {
+  if (!s && s !== 0) return 0;
+  try {
+    const st = usePOStore.getState().settings || {};
+    const tSep = st.thousandSeparator || ".";
+    const dSep = st.decimalSeparator || ",";
+    let str = String(s);
+    // Remove all thousand separators
+    str = str.split(tSep).join("");
+    // Replace decimal separator with period
+    str = str.split(dSep).join(".");
+    // Remove everything else except digits, dot, and minus
+    return parseFloat(str.replace(/[^0-9.-]/g, "")) || 0;
+  } catch(e) {
+    // fallback
+    return parseFloat(String(s).replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "")) || 0;
+  }
+};
+
+export const parseCSV = (text, delimiter = ',') => {
+  const res = [];
+  let row = [];
+  let cur = "";
+  let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cur += '"'; i++; }
+        else { inQ = false; }
+      } else { cur += c; }
+    } else {
+      if (c === '"') { inQ = true; }
+      else if (c === delimiter) { row.push(cur.trim()); cur = ""; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(cur.trim());
+        if (row.length > 1 || row[0] !== "") res.push(row);
+        row = []; cur = "";
+      } else { cur += c; }
+    }
+  }
+  if (cur || row.length > 0) {
+    row.push(cur.trim());
+    if (row.length > 1 || row[0] !== "") res.push(row);
+  }
+  return res;
+};
+export const parseSmartDate = (raw) => {
+  if (!raw || !raw.trim()) return "";
+  const s = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parts = s.split(/[.\-\/]/);
+  if (parts.length === 3) {
+    let [d, m, y] = parts.map(Number);
+    if (y < 100) y += y < 50 ? 2000 : 1900;
+    if (d > 0 && m > 0 && m <= 12 && y > 1900)
+      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+  return "";
+};
+
+/* ── CSV Status Mapping ── */
+export const mapPOSt = (s) => CSV_PO_ST[(s || "").toLowerCase().trim()] || "draft";
+export const mapItemSt = (s) => CSV_IT_ST[(s || "").toLowerCase().trim()] || "pending";
+
+/* ── DO Number Formatting ── */
+export const formatDO = (fmt, seq) => {
+  const n = new Date();
+  return (fmt || "DO/{YYYY}/{NNN}")
+    .replace(/{YYYY}/g, n.getFullYear())
+    .replace(/{YY}/g, String(n.getFullYear()).slice(2))
+    .replace(/{MM}/g, String(n.getMonth() + 1).padStart(2, "0"))
+    .replace(/{NNN}/g, String(seq).padStart(3, "0"))
+    .replace(/{NN}/g, String(seq).padStart(2, "0"))
+    .replace(/{N}/g, String(seq));
+};
+
+export const nextDOSeq = (dos) => {
+  const nums = (dos || []).flatMap((d) =>
+    (d.doNo || "").split(/[\/\-_]/).filter((p) => /^\d{2,}$/.test(p)).map(Number)
+  ).filter((n) => !isNaN(n));
+  return nums.length ? Math.max(...nums) + 1 : 1;
+};
+
+/* ── Quantity Helpers ── */
+export const getQtyDel = (itemId, dos) =>
+  (dos || []).reduce((s, d) => s + ((d.lines || []).find((l) => l.itemId === itemId)?.qtyDelivered || 0), 0);
+export const getQtyRem = (item, dos) => Math.max(0, (item.qty || 0) - getQtyDel(item.id, dos));
+
+/* ── Formatting ── */
+export const fmt = (n) => {
+  try {
+    const st = usePOStore.getState().settings || {};
+    const curr = typeof st.currencySymbol !== 'undefined' ? st.currencySymbol : "Rp.";
+    const tSep = st.thousandSeparator || ".";
+    const dSep = st.decimalSeparator || ",";
+
+    if (n == null || isNaN(n)) return `${curr} –`.trim();
+    
+    let [intP, decP] = Number(n).toFixed(2).split(".");
+    intP = intP.replace(/\B(?=(\d{3})+(?!\d))/g, tSep);
+    
+    const formattedNum = Number(decP) > 0 ? `${intP}${dSep}${decP}` : intP;
+    return curr ? `${curr} ${formattedNum}` : formattedNum;
+  } catch(e) {
+    return n != null && !isNaN(n)
+      ? new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(Number(n))
+      : "Rp –";
+  }
+};
+
+export const fmtShort = (n) => {
+  try {
+    const st = usePOStore.getState().settings || {};
+    const curr = typeof st.currencySymbol !== 'undefined' ? st.currencySymbol : "Rp.";
+    if (n == null || isNaN(n)) return `${curr} –`.trim();
+    const v = Number(n);
+    if (Math.abs(v) >= 1e12) return `${curr} ${(v / 1e12).toFixed(2)}T`.trim();
+    if (Math.abs(v) >= 1e9) return `${curr} ${(v / 1e9).toFixed(2)}M`.trim();
+    if (Math.abs(v) >= 1e6) return `${curr} ${(v / 1e6).toFixed(1)}Jt`.trim();
+    return fmt(v);
+  } catch(e) {
+    if (n == null || isNaN(n)) return "Rp –";
+    const v = Number(n);
+    if (Math.abs(v) >= 1e12) return `Rp ${(v / 1e12).toFixed(2)}T`;
+    if (Math.abs(v) >= 1e9) return `Rp ${(v / 1e9).toFixed(2)}M`;
+    if (Math.abs(v) >= 1e6) return `Rp ${(v / 1e6).toFixed(1)}Jt`;
+    return fmt(v);
+  }
+};
+
+export const fmtDate = (d) => {
+  if (!d) return "–";
+  try { return new Date(d + "T00:00:00").toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }); }
+  catch { return d; }
+};
+
+export const fmtPct = (v, t) => (t && t !== 0 ? `${((v / t) * 100).toFixed(1)}%` : "–");
+
+/* ── Item Calculations ── */
+export const itemNet = (i) => Math.max(0, (Number(i.unitPrice) || 0) * (Number(i.qty) || 0) - (Number(i.discount) || 0));
+export const itemBuy = (i) => {
+  const m = (i.supplierAssignments || []).find((a) => a.role === "main");
+  return m ? (m.pricePerUnit || 0) * (Number(i.qty) || 0) + (m.shippingTotal || 0) : 0;
+};
+export const itemMargin = (i) => { const b = itemBuy(i); return b > 0 ? itemNet(i) - b : null; };
+
+/* ── PO Calculations ── */
+export const getPOZone = (poId, items) => {
+  const z = [...new Set(items.filter((i) => i.poId === poId && i.zoneType).map((i) => i.zoneType))];
+  return !z.length ? "–" : z.length === 1 ? z[0] : "Mix";
+};
+
+export const calcPOTotals = (po, items) => {
+  if (po.totalLocked) {
+    const ex = Number(po.manualExPPN) || 0;
+    const ppn = Number(po.manualPPN) || Math.round(ex * PPN_RATE);
+    return { exPPN: ex, ppn, total: ex + ppn };
+  }
+  const ex = items.filter((i) => i.poId === po.id).reduce((s, i) => s + itemNet(i), 0);
+  return { exPPN: ex, ppn: Math.round(ex * PPN_RATE), total: Math.round(ex * (1 + PPN_RATE)) };
+};
+
+export const getPOProgress = (poId, items) => {
+  const p = items.filter((i) => i.poId === poId);
+  const n = p.length;
+  return {
+    n,
+    del: p.filter((i) => ["delivered", "invoiced", "paid"].includes(i.status)).length,
+    inv: p.filter((i) => ["invoiced", "paid"].includes(i.status)).length,
+    paid: p.filter((i) => i.status === "paid").length,
+  };
+};
+
+/* ── Visual Helpers ── */
+export const agingColor = (d) => (d < 0 ? "#64748b" : d < 30 ? "#059669" : d < 60 ? "#d97706" : "#dc2626");
+export const agingBg = (d) => (d < 0 ? "#f1f5f9" : d < 30 ? "#f0fdf4" : d < 60 ? "#fffbeb" : "#fef2f2");
+
+/* ── Filter Helpers ── */
+export const applyDateFilter = (val, f) => {
+  if (!f) return true; if (!val) return false;
+  if (f.from && val < f.from) return false;
+  if (f.to && val > f.to) return false;
+  return true;
+};
+
+export const applyNumFilter = (val, f) => {
+  if (!f) return true;
+  if (f.empty) return val == null || Number(val) === 0;
+  if (val == null) return false;
+  const n = Number(val) || 0;
+  if (f.min != null && n < f.min) return false;
+  if (f.max != null && n > f.max) return false;
+  return true;
+};
+
+export const applyTextFilter = (val, f) => {
+  if (!f) return true;
+  return String(val || "").toLowerCase().includes(f.toLowerCase());
+};
+
+/* ── Export/Copy ── */
+export const exportCSV = (headers, rows, fname) => {
+  const csv = [headers, ...rows]
+    .map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  Object.assign(document.createElement("a"), {
+    href: "data:text/csv;charset=utf-8," + encodeURIComponent(csv),
+    download: fname,
+  }).click();
+};
+
+export const copyTSV = (headers, rows, done) => {
+  const t = [headers, ...rows].map((r) => r.map((v) => String(v ?? "").replace(/\r?\n|\r/g, " ").replace(/\t/g, " ")).join("\t")).join("\n");
+  navigator.clipboard.writeText(t).then(done).catch(() => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      done?.();
+    } catch { /* silent */ }
+  });
+};
