@@ -79,11 +79,7 @@ export function AllItems({ onJump }) {
       if (numF.margin && !applyNumFilter(itemMargin(i), numF.margin))  return false;
       if (textF.itemName  && !applyTextFilter(i.itemName,  textF.itemName))  return false;
       if (textF.invoiceNo && !applyTextFilter(i.invoiceNo, textF.invoiceNo)) return false;
-      if (textF.poRef) {
-        const po = poById[i.poId];
-        const ref = [po?.orderNo, po?.company].filter(Boolean).join(" ");
-        if (!applyTextFilter(ref, textF.poRef)) return false;
-      }
+      if (textF.poNo      && !applyTextFilter(poById[i.poId]?.orderNo, textF.poNo)) return false;
       return true;
     });
     return [...r].sort((a, b) => {
@@ -239,16 +235,19 @@ export function AllItems({ onJump }) {
     { col: "invoiceNo",   label: "Invoice",           ft: "text", fk: "invoiceNo"    },
     { col: "zoneType",    label: "Zone",              ft: "col"                      },
     {
-      col: "company",
-      label: "PO / Perusahaan",
+      col: "poNo",
+      label: "No PO",
       ft: "text",
-      fk: "poRef",
+      fk: "poNo",
+      keyFn: (i) => poById[i.poId]?.orderNo || "",
+      labelFn: (i) => poById[i.poId]?.orderNo || "–",
+    },
+    {
+      col: "company",
+      label: "Perusahaan",
+      ft: "col",
       keyFn: (i) => poById[i.poId]?.company || "",
-      labelFn: (i) => {
-        const po = poById[i.poId];
-        if (!po) return "–";
-        return `${po.orderNo || ""} ${po.company || ""}`.trim() || "–";
-      },
+      labelFn: (i) => poById[i.poId]?.company || "–",
     },
     { col: "doNos",       label: "DO",                ft: null                       },
   ];
@@ -360,15 +359,20 @@ export function AllItems({ onJump }) {
                         placeholder="Pilih Zona..."
                       />
                     </td>
-                    <td className={tdCls} title={po?.orderNo || po?.company}>
-                      <div className="max-w-[150px] line-clamp-2 break-words whitespace-normal leading-tight">
-                        {po?.orderNo && (
+                    <td className={tdCls} title={po?.orderNo || ""}>
+                      {po?.orderNo
+                        ? (
                           <span
                             className="font-mono text-brand cursor-pointer hover:underline"
                             onClick={e => { e.stopPropagation(); onJump?.("po", po.id); }}
-                          >{po.orderNo}</span>
-                        )}
-                        {po?.orderNo && po?.company && <br />}
+                          >
+                            {po.orderNo}
+                          </span>
+                        )
+                        : "–"}
+                    </td>
+                    <td className={tdCls} title={po?.company || ""}>
+                      <div className="max-w-[160px] line-clamp-2 break-words whitespace-normal leading-tight">
                         {po?.company || "–"}
                       </div>
                     </td>
@@ -386,7 +390,7 @@ export function AllItems({ onJump }) {
                         {!itemDOs.length && <span className="text-[9px] text-text-muted">–</span>}
                       </div>
                     </td>
-                    <td className={`${tdCls} ${stickyR} ${rowBg} !p-[4px_6px]`}>
+                      <td className={`${tdCls} ${stickyR} ${rowBg} !p-[4px_6px]`}>
                       <div className="flex gap-[3px] flex-wrap justify-end">
                         <Btn size="sm" variant="ghost" title="Edit Item" className="!p-0 w-[24px] h-[24px] justify-center" onClick={() => setEditItem(item)}>
                           <Ico d={IC.edit} size={10} />
@@ -430,7 +434,7 @@ export function AllItems({ onJump }) {
                       </td>
                       <td className={`${tdCls} font-mono font-bold`}>{g.qty}</td>
                       <td className={`${tdCls} font-mono font-bold text-brand`}>{fmt(g.net)}</td>
-                      <td className={tdCls} colSpan={6}><span className="text-[10px] text-text-muted italic">Bervariasi</span></td>
+                      <td className={tdCls} colSpan={7}><span className="text-[10px] text-text-muted italic">Bervariasi</span></td>
                       <td className={`${tdCls} font-mono font-bold whitespace-nowrap ${Number(g.margin) >= 0 ? "text-green" : "text-red"}`}>{fmtShort(g.margin)}</td>
                       <td className={`${tdCls} ${stickyR} ${grpBg}`} />
                     </tr>

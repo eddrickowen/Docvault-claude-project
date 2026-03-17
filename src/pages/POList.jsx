@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { Btn, Ico, IC, Modal, SPill, FIn, FSel } from "../components/ui";
 import { Pagination, DateRangeFilter, NumberRangeFilter, TextFilter, ColFilter, InlineCell, CopyTSVButton, ImportWizard, DataTableToolbar, DataTableHeader } from "../components/shared";
 import { ItemForm, POForm, DOGeneratorModal, DOPrintTemplate, SupplierFormModal, BulkEditModal } from "../components/forms";
@@ -25,25 +25,42 @@ function DODetailPanel({ dos, poId, po, items, onDeleteDO }) {
   const poDos = (dos || []).filter((d) => d.poId === poId);
   const [printDO, setPrintDO] = useState(null);
 
-  const handlePrintDO = (d) => {
-    setPrintDO(d);
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => setPrintDO(null), 500);
-    }, 100);
-  };
-
   if (!poDos.length) return <span className="text-[11px] text-text-muted">Belum ada DO</span>;
 
   return (
     <>
       {printDO && (
-        <DOPrintTemplate
-          doData={printDO}
-          po={po}
-          items={items}
-          vendorName={VENDOR_NAME}
-        />
+        <>
+          <DOPrintTemplate
+            doData={printDO}
+            po={po}
+            items={items}
+            vendorName={VENDOR_NAME}
+          />
+          <Modal
+            open
+            onClose={() => setPrintDO(null)}
+            title={`Preview Surat Jalan ${printDO.doNo}`}
+            wide
+          >
+            <div className="text-[11px] text-text-muted mb-3">
+              Layout DO akan ikut tercetak ketika Anda membuka dialog print (Ctrl+P).
+            </div>
+            <div className="flex justify-end gap-2">
+              <Btn variant="secondary" onClick={() => setPrintDO(null)}>
+                Tutup Preview
+              </Btn>
+              <Btn
+                variant="blue"
+                onClick={() => {
+                  window.print();
+                }}
+              >
+                <Ico d={IC.print} size={12} /> Buka Dialog Print
+              </Btn>
+            </div>
+          </Modal>
+        </>
       )}
       <div className="flex flex-col gap-1.5">
         {poDos.map((d) => {
@@ -62,7 +79,7 @@ function DODetailPanel({ dos, poId, po, items, onDeleteDO }) {
                   <span className="text-[10px] text-text-muted">🚗 {driver}{plate ? ` · ${plate}` : ""}</span>
                 )}
                 <div className="ml-auto flex gap-1.5">
-                  <Btn size="sm" variant="blue" onClick={() => handlePrintDO(d)}>
+                  <Btn size="sm" variant="blue" onClick={() => setPrintDO(d)}>
                     <Ico d={IC.print} size={10} /> Cetak
                   </Btn>
                   {onDeleteDO && (
@@ -415,6 +432,7 @@ export function POList() {
     pos, items, suppliers, dos, companies, zoneTypes, settings, hsDB,
     addPO, updatePO, deletePO, addItem, updateItem, deleteItem,
     addSupplier, addCompany, saveDO, deleteDO, toast,
+    jumpTargetPOId, setJumpTargetPO,
   } = usePOStore();
 
   const {
@@ -472,6 +490,31 @@ export function POList() {
   }, [pos, items, search, sort, colF, dateF, numF, textF]);
 
   const paged = getPaged(sortedFiltered);
+
+  // Handle cross-page jump-to-PO (from Dashboard/Items/Supplier pages)
+  useEffect(() => {
+    if (!jumpTargetPOId) return;
+    const idx = sortedFiltered.findIndex((p) => p.id === jumpTargetPOId);
+    if (idx === -1) {
+      setJumpTargetPO(null);
+      return;
+    }
+    const per =
+      perPage === "All" ? (sortedFiltered.length || 1) : Number(perPage) || PAGE_SIZE;
+    const targetPage = Math.floor(idx / per) + 1;
+    setPage(targetPage);
+
+    // After pagination applies, scroll to row and highlight
+    setTimeout(() => {
+      const el = document.getElementById("po-row-" + jumpTargetPOId);
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        el.classList.add("row-hl");
+        setTimeout(() => el.classList.remove("row-hl"), 1800);
+      }
+      setJumpTargetPO(null);
+    }, 200);
+  }, [jumpTargetPOId, sortedFiltered, perPage, setPage, setJumpTargetPO]);
 
   const POProgress = ({ poId }) => {
     const { n, del, inv, paid } = getPOProgress(poId, items);
@@ -689,7 +732,7 @@ export function POList() {
               const agingDays  = po.status !== "paid" && po.status !== "cancelled" ? diffDays(po.orderDate) : -1;
               const priBg      = po.priority === "urgent" ? "text-red" : "text-text-primary";
               return (
-                <>
+                <Fragment key={po.id}>
                   <tr
                     id={"po-row-" + po.id}
                     key={po.id}
@@ -803,7 +846,7 @@ export function POList() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>

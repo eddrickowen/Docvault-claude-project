@@ -3,7 +3,9 @@
  * Format: Continuous Form Half-Page (9.5" × 5.5" / ~241mm × 140mm).
  * Rendered hidden in DOM; shown via @media print when id="pa".
  * Replaces window.document.write approach.
+ * **/
 import { fmtDate } from "../../lib/helpers";
+
 import { createPortal } from "react-dom";
 
 /* ── Class constants ── */

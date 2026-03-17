@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState, useMemo, Fragment } from "react";
 import { Btn, Ico, IC, TagChip, SBadge, FIn, FSel } from "../components/ui";
 import { SupplierFormModal } from "../components/forms";
 import { useConfirm } from "../hooks";
@@ -31,6 +31,12 @@ export function SupplierPage({ onJump }) {
     (!tagFilter || s.tags?.includes(tagFilter))
   );
   const allTags = [...new Set(suppliers.flatMap((s) => s.tags || []))].sort();
+
+  const poById = useMemo(() => {
+    const map = {};
+    pos.forEach((p) => { map[p.id] = p; });
+    return map;
+  }, [pos]);
 
   const supItems = (id) => items.filter((i) => (i.supplierAssignments || []).some((a) => a.supplierId === id));
   const supAsgn  = (item, supId) => (item.supplierAssignments || []).find((a) => a.supplierId === supId);
@@ -151,12 +157,52 @@ export function SupplierPage({ onJump }) {
                                   return acc;
                                 }, {})).sort((a,b) => a.name.localeCompare(b.name));
 
-                                return grouped.map((g, gIdx) => {
-                                  const isGExp = expGrp.has(`${s.id}_${g.name}`);
-                                  const toggleGExp = () => { const ns = new Set(expGrp); isGExp ? ns.delete(`${s.id}_${g.name}`) : ns.add(`${s.id}_${g.name}`); setExpGrp(ns); };
-                                  
+                                return grouped.map((g) => {
+                                  // If only one transaction for this item name, render as a normal row (no expand toggle).
+                                  if (g.items.length <= 1) {
+                                    const item = g.items[0];
+                                    const po = poById[item.poId];
+                                    const a = supAsgn(item, s.id);
+                                    const isMain = a?.role === "main";
+                                    const totalB = (a?.pricePerUnit || 0) * (item.qty || 0) + (a?.shippingTotal || 0);
+                                    const mg = isMain ? itemNet(item) - totalB : null;
+                                    const mgCls = mg === null ? "text-text-muted" : mg >= 0 ? "text-green" : "text-red";
+                                    return (
+                                      <tr key={item.id} className="bg-white border-b border-border-default">
+                                        <td className={tdCls}>
+                                          <div className="font-semibold truncate max-w-[260px]" title={item.itemName}>{item.itemName}</div>
+                                          <div className="text-[9px] text-text-muted font-normal">{item.qty} {item.unit}</div>
+                                        </td>
+                                        <td className={`${tdCls} font-mono text-[10px] text-brand truncate max-w-[130px]`} title={po?.orderNo}>
+                                          {po?.orderNo
+                                            ? <span className="cursor-pointer hover:underline" onClick={e => { e.stopPropagation(); onJump?.("po", po.id); }}>{po.orderNo}</span>
+                                            : "–"}
+                                        </td>
+                                        <td className={`${tdCls} text-[10px] truncate max-w-[120px]`} title={po?.company}>{po?.company || "–"}</td>
+                                        <td className={tdCls}>
+                                          <span className={`text-[9px] font-bold rounded-[3px] px-1.5 py-px uppercase ${isMain ? "text-brand bg-brand-soft" : "text-text-secondary bg-bg-app"}`}>{a?.role || "–"}</span>
+                                        </td>
+                                        <td className={`${tdCls} font-mono whitespace-nowrap`}>{fmt(a?.pricePerUnit || 0)}</td>
+                                        <td className={`${tdCls} font-mono text-text-secondary whitespace-nowrap`}>{(a?.shippingTotal || 0) > 0 ? fmt(a.shippingTotal) : "–"}</td>
+                                        <td className={`${tdCls} font-mono font-bold whitespace-nowrap ${isMain ? "text-orange" : "text-text-muted"}`}>{isMain ? fmt(totalB) : "–"}</td>
+                                        <td className={`${tdCls} font-mono whitespace-nowrap`}>{fmt(item.unitPrice)}</td>
+                                        <td className={`${tdCls} font-mono font-bold text-brand whitespace-nowrap`}>{fmt(itemNet(item))}</td>
+                                        <td className={`${tdCls} font-mono font-bold whitespace-nowrap ${mgCls}`}>{mg === null ? "–" : fmt(mg)}</td>
+                                        <td className={tdCls}><SBadge status={item.status} cfg={ITEM_STATUS} /></td>
+                                      </tr>
+                                    );
+                                  }
+
+                                  const gKey = `${s.id}_${g.name}`;
+                                  const isGExp = expGrp.has(gKey);
+                                  const toggleGExp = () => {
+                                    const ns = new Set(expGrp);
+                                    isGExp ? ns.delete(gKey) : ns.add(gKey);
+                                    setExpGrp(ns);
+                                  };
+
                                   return (
-                                    <Fragment key={g.name}>
+                                    <Fragment key={gKey}>
                                       <tr className="bg-[#f0f4f8] cursor-pointer hover:bg-brand-soft border-b border-border-default transition-colors" onClick={toggleGExp}>
                                         <td className={`${tdCls} font-bold text-text-primary`} colSpan={6}>
                                           <div className="flex items-center gap-2">
@@ -174,7 +220,7 @@ export function SupplierPage({ onJump }) {
                                         <td className={tdCls} />
                                       </tr>
                                       {isGExp && g.items.map((item, idx) => {
-                                        const po     = pos.find((p) => p.id === item.poId);
+                                        const po     = poById[item.poId];
                                         const a      = supAsgn(item, s.id);
                                         const isMain = a?.role === "main";
                                         const totalB = (a?.pricePerUnit || 0) * (item.qty || 0) + (a?.shippingTotal || 0);

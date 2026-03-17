@@ -8,6 +8,7 @@ import { get as idbGet, set as idbSet } from "idb-keyval";
 import {
   INIT_POS, INIT_ITEMS, INIT_SUPPLIERS, INIT_DOS,
   INIT_COMPANIES, INIT_ZONE_TYPES, INIT_SETTINGS, INIT_HS_DB,
+  STATUS_RANK,
 } from "../lib/constants";
 import { today } from "../lib/helpers";
 
@@ -43,12 +44,6 @@ function save(key, val) {
   idbSet(key, val).catch(() => {});
 }
 
-/* ── Status rank for auto-sync ── */
-const STATUS_RANK = {
-  draft: 0, pending: 1, confirmed: 2, revision: 1, on_hold: 1,
-  partial_del: 3, delivered: 4, invoiced: 5, partial_pay: 6, paid: 7, cancelled: 0,
-};
-
 /**
  * Given updated items array, return updated pos array with auto-synced statuses.
  * No side-effects — pure function, called inside set() to keep state consistent.
@@ -80,6 +75,7 @@ export const usePOStore = create((set, get) => ({
   companies: [], zoneTypes: [], settings: {}, hsDB: [],
   _loaded: false,
   _toast: null, // { id, msg }
+  jumpTargetPOId: null,
 
   /* ── Init: load all data from IDB (with localStorage migration) ── */
   init: async () => {
@@ -103,6 +99,9 @@ export const usePOStore = create((set, get) => ({
     set({ _toast: { id, msg } });
     setTimeout(() => set((s) => s._toast?.id === id ? { _toast: null } : {}), 2500);
   },
+
+  /* ── Cross-page jump helpers ── */
+  setJumpTargetPO: (id) => set(() => ({ jumpTargetPOId: id })),
 
   /* ════════ PO CRUD ════════ */
   addPO: (po, draftItems = []) => set((s) => {

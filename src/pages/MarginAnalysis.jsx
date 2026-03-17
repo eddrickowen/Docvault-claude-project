@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Ico, IC, FIn } from "../components/ui";
 import { CopyTSVButton } from "../components/shared";
 import { usePOStore } from "../store/usePOStore";
@@ -24,10 +24,16 @@ export function MarginAnalysis() {
   const [sortCol, setSortCol] = useState("net");
   const [sortDir, setSortDir] = useState("desc");
 
+  const poById = useMemo(() => {
+    const map = {};
+    pos.forEach((p) => { map[p.id] = p; });
+    return map;
+  }, [pos]);
+
   const groups = useMemo(() => {
     const m = {};
     items.forEach((i) => {
-      const po = pos.find((p) => p.id === i.poId);
+      const po = poById[i.poId];
       let key = "";
       if      (groupBy === "po")       key = po?.orderNo || i.poId;
       else if (groupBy === "company")  key = po?.company || "–";
@@ -63,7 +69,7 @@ export function MarginAnalysis() {
     if (!search) return all;
     const q = search.toLowerCase();
     return all.filter((g) => g.key.toLowerCase().includes(q));
-  }, [items, pos, suppliers, groupBy, search, sortCol, sortDir]);
+  }, [items, poById, suppliers, groupBy, search, sortCol, sortDir]);
 
   const tSort = (col) => {
     if (sortCol === col) setSortDir(sortDir === "asc" ? "desc" : "asc");

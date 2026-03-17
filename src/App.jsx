@@ -16,7 +16,7 @@ import {
 } from "./pages";
 
 export default function App() {
-  const { init, _loaded, _toast } = usePOStore();
+  const { init, _loaded, _toast, setJumpTargetPO } = usePOStore();
   const [view, setView] = useState("dashboard");
   const { show: toast, Toast } = useToast();
 
@@ -29,18 +29,24 @@ export default function App() {
   }, [_toast]);
 
   /* ── Jump to PO with highlight ── */
-  const handleJump = useCallback((v = "po", id) => {
-    setView(v);
-    if (id)
-      setTimeout(() => {
-        const el = document.getElementById("po-row-" + id);
-        if (el) {
-          el.scrollIntoView({ block: "center", behavior: "smooth" });
-          el.classList.add("row-hl");
-          setTimeout(() => el.classList.remove("row-hl"), 1800);
-        }
-      }, 150);
-  }, []);
+  const handleJump = useCallback(
+    (v = "po", id) => {
+      setView(v);
+      if (v === "po" && id) {
+        setJumpTargetPO(id);
+      } else if (id) {
+        setTimeout(() => {
+          const el = document.getElementById("po-row-" + id);
+          if (el) {
+            el.scrollIntoView({ block: "center", behavior: "smooth" });
+            el.classList.add("row-hl");
+            setTimeout(() => el.classList.remove("row-hl"), 1800);
+          }
+        }, 150);
+      }
+    },
+    [setJumpTargetPO],
+  );
 
   if (!_loaded) {
     return (
