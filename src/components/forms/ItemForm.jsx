@@ -6,7 +6,7 @@ import { SupplierAssignments } from "./SupplierAssignments";
 import {
   uid, today, getQtyDel, fmt, itemNet, itemBuy,
 } from "../../lib/helpers";
-import { UNITS, ITEM_STATUS, mkItem } from "../../lib/constants";
+import { UOM_OPTIONS, ITEM_STATUS, mkItem } from "../../lib/constants";
 
 /**
  * ItemForm — create or edit a PO line item.
@@ -74,7 +74,7 @@ export function ItemForm({ initial, poId, zoneTypes, suppliers, dos, hsDB = [], 
             <NumInput value={f.qty} onChange={set("qty")} min={0} />
           </FF>
           <FF label="Unit">
-            <FSel value={f.unit} onChange={set("unit")} options={UNITS.map((u) => ({ v: u, l: u }))} />
+            <FSel value={f.unit} onChange={set("unit")} options={UOM_OPTIONS} />
           </FF>
           <FF label="HS Code">
             <HSCodeInput value={f.hsCode || ""} onChange={set("hsCode")} hsDB={hsDB} />

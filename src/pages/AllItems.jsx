@@ -1,6 +1,6 @@
 import { useState, useMemo, Fragment } from "react";
 import { Btn, Ico, IC, Modal, SPill, FIn, FSel } from "../components/ui";
-import { Pagination, DateRangeFilter, NumberRangeFilter, TextFilter, ColFilter, InlineCell, CopyTSVButton, DataTableToolbar, DataTableHeader } from "../components/shared";
+import { Pagination, DateRangeFilter, NumberRangeFilter, TextFilter, ColFilter, InlineCell, CopyTSVButton, DataTableToolbar, DataTableHeader, ItemTableRow } from "../components/shared";
 import { ItemForm, BulkEditModal } from "../components/forms";
 import { useConfirm, useDataTable } from "../hooks";
 import { usePOStore } from "../store/usePOStore";
@@ -313,94 +313,26 @@ export function AllItems({ onJump }) {
             {paged.map((rowItem, idx) => {
               /* ── renderItemRow defined first so group rows can call it ── */
               const renderItemRow = (item, subIdx, isSub = false) => {
-                const po = pos.find((p) => p.id === item.poId);
-                const mg = itemMargin(item);
-                const qDel = getQtyDel(item.id, dos);
-                const itemDOs = (dos || []).filter((d) => (d.lines || []).some((l) => l.itemId === item.id));
-                const isSel = bulkSel.has(item.id);
-                const rowBg = isSel ? "bg-[#eff6ff]" : isSub ? "bg-[#f8fafc] hover:bg-white" : (subIdx % 2 === 0 ? "bg-white hover:bg-surface-alt" : "bg-surface-alt hover:bg-white");
-                const mgCls = mg === null ? "text-text-muted" : mg >= 0 ? "text-green" : "text-red";
-                const mainSupplier = (item.supplierAssignments || []).find(a => a.role === "main");
-                const mainSupplierName = mainSupplier ? suppliers?.find(s => s.id === mainSupplier.supplierId)?.name : null;
+                const po = poById[item.poId];
                 return (
-                  <tr key={item.id} className={`${rowBg} transition-colors ${isSub ? "border-l-[3px] border-l-brand" : "border-b border-border-default"}`}>
-                    <td className={`${tdCls} ${stickyL} ${rowBg}`}>
-                      <input type="checkbox" checked={isSel} onChange={() => { const s = new Set(bulkSel); s.has(item.id) ? s.delete(item.id) : s.add(item.id); setBulkSel(s); }} />
-                    </td>
-                    <td className={tdCls} title={item.itemName}>
-                      <div className={`font-semibold line-clamp-3 min-w-[120px] max-w-[200px] break-words whitespace-normal leading-snug ${isSub ? "text-[10px] text-text-secondary pl-2" : ""}`}>{item.itemName}</div>
-                    </td>
-                    <td className={`${tdCls} font-mono`}>
-                      <div className="flex items-center gap-1">
-                        <span>{item.qty}</span>
-                        <span className="text-text-secondary text-[10px]">{item.unit}</span>
-                        {qDel > 0 && <span className="text-[9px] text-green ml-0.5">({qDel}↑)</span>}
-                      </div>
-                    </td>
-                    <td className={`${tdCls} font-mono whitespace-nowrap`}>{fmt(item.unitPrice)}</td>
-                    <td className={`${tdCls} font-mono font-bold text-brand whitespace-nowrap`}>{fmt(itemNet(item))}</td>
-                    <td className={tdCls} title={mainSupplierName || "–"}>
-                      <div className="max-w-[120px] truncate">{mainSupplierName || "–"}</div>
-                    </td>
-                    <td className={`${tdCls} font-mono font-bold whitespace-nowrap ${mgCls}`}>{mg === null ? "–" : fmtShort(mg)}</td>
-                    <td className={tdCls} onClick={(e) => e.stopPropagation()}><SPill value={item.status} onChange={(v) => updateItem({ ...item, status: v })} cfg={ITEM_STATUS} mini /></td>
-                    <td className={`${tdCls} whitespace-nowrap`}><InlineCell value={item.deliveryDate} onSave={(v) => updateItem({ ...item, deliveryDate: v })} isDate placeholder="–" /></td>
-                    <td className={tdCls} title={item.invoiceNo}>
-                      <div className="max-w-[120px] whitespace-normal break-words line-clamp-2">
-                        <InlineCell value={item.invoiceNo} onSave={(v) => updateItem({ ...item, invoiceNo: v })} mono placeholder="INV..." />
-                      </div>
-                    </td>
-                    <td className={`${tdCls} truncate max-w-[110px]`} title={item.zoneType || po?.zoneType || ""}>
-                      <InlineCell
-                        value={item.zoneType || po?.zoneType || ""}
-                        onSave={(v) => updateItem({ ...item, zoneType: v })}
-                        select
-                        opts={(zoneTypes || []).map(z => ({ v: typeof z === "object" ? z.name : z, l: typeof z === "object" ? z.name : z }))}
-                        placeholder="Pilih Zona..."
-                      />
-                    </td>
-                    <td className={tdCls} title={po?.orderNo || ""}>
-                      {po?.orderNo
-                        ? (
-                          <span
-                            className="font-mono text-brand cursor-pointer hover:underline"
-                            onClick={e => { e.stopPropagation(); onJump?.("po", po.id); }}
-                          >
-                            {po.orderNo}
-                          </span>
-                        )
-                        : "–"}
-                    </td>
-                    <td className={tdCls} title={po?.company || ""}>
-                      <div className="max-w-[160px] line-clamp-2 break-words whitespace-normal leading-tight">
-                        {po?.company || "–"}
-                      </div>
-                    </td>
-                    <td className={tdCls}>
-                      <div className="flex flex-col gap-0.5">
-                        {itemDOs.map((d) => {
-                          const line = d.lines.find((l) => l.itemId === item.id);
-                          return (
-                            <div key={d.id} className="flex flex-col">
-                              <span className="text-[9px] font-mono text-brand bg-brand-soft rounded-[3px] px-1 whitespace-nowrap">{d.doNo}</span>
-                              <span className="text-[8px] text-text-muted">{fmtDate(d.deliveryDate)} · {line?.qtyDelivered} {item.unit}</span>
-                            </div>
-                          );
-                        })}
-                        {!itemDOs.length && <span className="text-[9px] text-text-muted">–</span>}
-                      </div>
-                    </td>
-                      <td className={`${tdCls} ${stickyR} ${rowBg} !p-[4px_6px]`}>
-                      <div className="flex gap-[3px] flex-wrap justify-end">
-                        <Btn size="sm" variant="ghost" title="Edit Item" className="!p-0 w-[24px] h-[24px] justify-center" onClick={() => setEditItem(item)}>
-                          <Ico d={IC.edit} size={10} />
-                        </Btn>
-                        <Btn size="sm" variant="danger" title="Hapus Item" className="!p-0 w-[24px] h-[24px] justify-center" onClick={() => ask(`Hapus item "${item.itemName}"?`, () => deleteItem(item.id), { danger: true, confirmLabel: "Ya, Hapus" })}>
-                          <Ico d={IC.trash} size={10} />
-                        </Btn>
-                      </div>
-                    </td>
-                  </tr>
+                  <ItemTableRow
+                    key={item.id}
+                    item={item}
+                    po={po}
+                    subIdx={subIdx}
+                    isSub={isSub}
+                    isSel={bulkSel.has(item.id)}
+                    onToggleSel={() => { const s = new Set(bulkSel); s.has(item.id) ? s.delete(item.id) : s.add(item.id); setBulkSel(s); }}
+                    onUpdate={updateItem}
+                    onEdit={setEditItem}
+                    onDelete={(it) => ask(`Hapus item "${it.itemName}"?`, () => deleteItem(it.id), { danger: true, confirmLabel: "Ya, Hapus" })}
+                    onJumpPO={(id) => onJump?.("po", id)}
+                    suppliers={suppliers}
+                    dos={dos}
+                    zoneTypes={zoneTypes}
+                    stickyL={stickyL}
+                    stickyR={stickyR}
+                  />
                 );
               };
 

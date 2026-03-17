@@ -13,6 +13,22 @@ export const isIncompletePO = (p) =>
   !p.orderNo || !p.orderNo.trim() || p.orderNo.trim() === "Order" ||
   !p.orderDate || p.orderDate === "dd/mm/yyyy" || !p.company || !p.company.trim();
 
+export const validatePO = (p) => {
+  const errors = [];
+  if (!p.orderNo?.trim()) errors.push("No. PO wajib diisi");
+  if (!p.company?.trim()) errors.push("Perusahaan wajib diisi");
+  if (!p.orderDate) errors.push("Tanggal Order wajib diisi");
+  return { valid: !errors.length, errors };
+};
+
+export const validateItem = (i) => {
+  const errors = [];
+  if (!i.itemName?.trim()) errors.push("Nama Item wajib diisi");
+  if (!i.qty || i.qty <= 0) errors.push("Qty harus lebih dari 0");
+  if (!i.unitPrice || i.unitPrice < 0) errors.push("Harga Jual tidak boleh negatif");
+  return { valid: !errors.length, errors };
+};
+
 /* ── Parsing ── */
 export const parseIDR = (s) => {
   if (!s && s !== 0) return 0;

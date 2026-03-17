@@ -169,6 +169,15 @@ export const mkAsgn = (o = {}) => ({
   link: "", notes: "", ...o,
 });
 
+export const UOM_OPTIONS = [
+  { v: "pcs",  l: "Pcs" },
+  { v: "unit", l: "Unit" },
+  { v: "box",  l: "Box" },
+  { v: "kg",   l: "Kg" },
+  { v: "roll", l: "Roll" },
+  { v: "set",  l: "Set" },
+];
+
 /* ── Initial PO & Item & DO seed data ── */
 export const INIT_POS = [
   { id: "po001", quoteRef: "019/MIA/V/2024",       orderNo: "PTAM/PO/NT/24/00497",  company: "PT. AGRO MURNI",                orderDate: "2024-05-21", prNo: "PTAM/PR/00497", notes: "", folder: "", status: "paid",      priority: "normal", totalLocked: false, manualExPPN: 0,        manualPPN: 0 },

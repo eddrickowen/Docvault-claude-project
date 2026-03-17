@@ -9,3 +9,4 @@ export { SupplierSelect } from "./SupplierSelect";
 export { CopyTSVButton } from "./CopyTSVButton";
 export { DataTableToolbar } from "./DataTableToolbar";
 export { DataTableHeader } from "./DataTableHeader";
+export { ItemTableRow } from "./ItemTableRow";

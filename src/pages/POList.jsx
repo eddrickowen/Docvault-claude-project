@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { Btn, Ico, IC, Modal, SPill, FIn, FSel } from "../components/ui";
-import { Pagination, DateRangeFilter, NumberRangeFilter, TextFilter, ColFilter, InlineCell, CopyTSVButton, ImportWizard, DataTableToolbar, DataTableHeader } from "../components/shared";
+import { Pagination, DateRangeFilter, NumberRangeFilter, TextFilter, ColFilter, InlineCell, CopyTSVButton, ImportWizard, DataTableToolbar, DataTableHeader, ItemTableRow } from "../components/shared";
 import { ItemForm, POForm, DOGeneratorModal, DOPrintTemplate, SupplierFormModal, BulkEditModal } from "../components/forms";
 import { useConfirm, useDataTable } from "../hooks";
 import { usePOStore } from "../store/usePOStore";
@@ -253,90 +253,24 @@ function ExpandedRow({ po, items, suppliers, dos, zoneTypes, settings, hsDB = []
               </tr>
             </thead>
             <tbody>
-              {poItems.map((item, i) => {
-                const main    = (item.supplierAssignments || []).find((a) => a.role === "main");
-                const mainSup = suppliers.find((s) => s.id === main?.supplierId);
-                const mg      = itemMargin(item);
-                const net     = itemNet(item);
-                const qDel    = getQtyDel(item.id, dos);
-                const itemDOs = (dos || []).filter((d) => (d.lines || []).some((l) => l.itemId === item.id));
-                const rowBg   = bulkItems.has(item.id) ? "bg-[#eff6ff]" : i % 2 === 0 ? "bg-white" : "bg-surface-alt";
-                const mgCls   = mg === null ? "text-text-muted" : mg >= 0 ? "text-green" : "text-red";
-                const qDelCls = qDel >= item.qty ? "text-green" : "text-amber";
-                return (
-                  <tr key={item.id} className={`border-b border-border-default ${rowBg}`}>
-                    <td className={`${tdCls} ${stickyL} ${rowBg}`} onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" checked={bulkItems.has(item.id)} onChange={() => toggleBulkItem(item.id)} />
-                    </td>
-                    <td className={tdCls} title={item.itemName}>
-                      <div className="font-semibold line-clamp-3 min-w-[120px] max-w-[200px] break-words whitespace-normal leading-snug">
-                        {item.itemName}
-                        {(item.supplierAssignments || []).length > 1 && (
-                          <span className="ml-1 text-[9px] text-text-muted inline-block">+{(item.supplierAssignments || []).length - 1}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className={`${tdCls} font-mono`}>
-                      <div className="flex items-center gap-1">
-                        <span>{item.qty}</span>
-                        <span className="text-text-secondary text-[10px]">{item.unit}</span>
-                      </div>
-                    </td>
-                    <td className={`${tdCls} font-mono whitespace-nowrap`}>{fmt(item.unitPrice)}</td>
-                    <td className={`${tdCls} font-mono font-semibold text-brand whitespace-nowrap`}>{fmt(net)}</td>
-                    <td className={`${tdCls} truncate max-w-[120px]`} title={mainSup?.name || ""}>
-                      {mainSup
-                        ? <span className="text-[11px] text-text-primary">{mainSup.name}</span>
-                        : <span className="text-[11px] text-text-muted italic">Belum diset</span>
-                      }
-                    </td>
-                    <td className={`${tdCls} font-mono font-semibold whitespace-nowrap ${mgCls}`}>
-                      {mg === null ? "–" : fmt(mg)}
-                    </td>
-                    <td className={tdCls}>
-                      <SPill value={item.status} onChange={(v) => onUpdateItem({ ...item, status: v })} cfg={ITEM_STATUS} mini />
-                    </td>
-                    <td className={`${tdCls} whitespace-nowrap`}>
-                      <InlineCell value={item.deliveryDate} onSave={(v) => onUpdateItem({ ...item, deliveryDate: v })} isDate placeholder="Pilih" />
-                    </td>
-                    <td className={`${tdCls} whitespace-nowrap`}>
-                      <div className="max-w-[120px] whitespace-normal break-words line-clamp-2">
-                        <InlineCell value={item.invoiceNo} onSave={(v) => onUpdateItem({ ...item, invoiceNo: v })} mono placeholder="INV..." />
-                      </div>
-                    </td>
-                    <td className={`${tdCls} truncate max-w-[110px]`} title={item.zoneType || po.zoneType || ""}>
-                      <InlineCell 
-                        value={item.zoneType || po.zoneType || ""} 
-                        onSave={(v) => onUpdateItem({ ...item, zoneType: v })} 
-                        select 
-                        opts={(zoneTypes || []).map(z => ({ v: typeof z === 'object' ? z.name : z, l: typeof z === 'object' ? z.name : z }))} 
-                        placeholder="Pilih Zona..." 
-                      />
-                    </td>
-                    <td className={tdCls}>
-                      <div className="flex flex-col gap-0.5">
-                        {itemDOs.map((d) => {
-                          const line = d.lines.find((l) => l.itemId === item.id);
-                          return (
-                            <div key={d.id} className="flex gap-1 items-center">
-                              <span className="text-[9px] font-mono text-brand bg-brand-soft rounded-[3px] px-1 whitespace-nowrap">{d.doNo}</span>
-                              <span className="text-[9px] text-text-muted">{line?.qtyDelivered}{item.unit ? ` ${item.unit}` : ""}</span>
-                            </div>
-                          );
-                        })}
-                        {!itemDOs.length && <span className="text-[9px] text-text-muted">–</span>}
-                        {qDel > 0 && <span className={`text-[9px] font-bold ${qDelCls}`}>{qDel}/{item.qty}</span>}
-                      </div>
-                    </td>
-                    <td className={`${tdCls} ${stickyR} ${rowBg}`}>
-                      <div className="flex gap-[3px]">
-                        <Btn size="sm" variant="ghost" className="!p-0 w-[24px] h-[24px] justify-center" onClick={() => setEditItem(item)}><Ico d={IC.edit} size={10} /></Btn>
-                        <Btn size="sm" variant="danger" className="!p-0 w-[24px] h-[24px] justify-center" onClick={() => onConfirmDelete([item.id], () => {})}><Ico d={IC.trash} size={10} /></Btn>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {poItems.map((item, i) => (
+                <ItemTableRow
+                  key={item.id}
+                  item={item}
+                  po={po}
+                  subIdx={i}
+                  isSel={bulkItems.has(item.id)}
+                  onToggleSel={() => toggleBulkItem(item.id)}
+                  onUpdate={onUpdateItem}
+                  onEdit={setEditItem}
+                  onDelete={(it) => onConfirmDelete([it.id], () => {})}
+                  suppliers={suppliers}
+                  dos={dos}
+                  zoneTypes={zoneTypes}
+                  stickyL={stickyL}
+                  stickyR={stickyR}
+                />
+              ))}
             </tbody>
             <tfoot>
               <tr className="bg-brand-soft border-t border-brand-mid">

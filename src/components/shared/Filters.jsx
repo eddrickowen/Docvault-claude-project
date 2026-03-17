@@ -232,12 +232,34 @@ export function ColFilter({ col, rows, keyFn, labelFn, active, onApply }) {
   };
 
   const filtered = vals.filter(([, l]) => !q || l.toLowerCase().includes(q.toLowerCase()));
-  const allSel = !sel || sel.size === 0;
-  const isChk = (k) => allSel || sel.has(k);
+  const allSel = sel === null;
+  const isChk = (k) => allSel || (sel && sel.has(k));
+  
   const toggle = (k) => {
-    const base = allSel ? new Set(vals.map(([k2]) => k2)) : new Set(sel);
-    base.has(k) ? base.delete(k) : base.add(k);
-    setSel(base.size === vals.length ? null : base);
+    const next = new Set(allSel ? vals.map(([k2]) => k2) : sel);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
+    setSel(next.size === vals.length ? null : next);
+  };
+
+  const selectAll = () => {
+    if (!q) {
+      setSel(null);
+    } else {
+      const next = new Set(allSel ? vals.map(([k]) => k) : sel);
+      filtered.forEach(([k]) => next.add(k));
+      setSel(next.size === vals.length ? null : next);
+    }
+  };
+
+  const deselectAll = () => {
+    if (!q) {
+      setSel(new Set());
+    } else {
+      const next = new Set(allSel ? vals.map(([k]) => k) : sel);
+      filtered.forEach(([k]) => next.delete(k));
+      setSel(next.size === vals.length ? null : next);
+    }
   };
 
   return (
@@ -256,9 +278,16 @@ export function ColFilter({ col, rows, keyFn, labelFn, active, onApply }) {
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari..." className={`${inputCls} py-[5px]`} />
           </div>
           <div className="overflow-y-auto flex-1">
-            <label className="flex items-center gap-2 px-3 py-[7px] cursor-pointer border-b border-border-default text-[11px] font-semibold">
-              <input type="checkbox" checked={allSel} onChange={() => setSel(null)} />(Semua)
-            </label>
+            <div className="flex items-center gap-2 px-3 py-[7px] border-b border-border-default text-[11px] font-semibold bg-bg-app/30">
+              <label className="flex items-center gap-2 cursor-pointer flex-1">
+                <input type="checkbox" checked={allSel} onChange={() => setSel(allSel ? new Set() : null)} />
+                <span>(Semua)</span>
+              </label>
+              <div className="flex gap-2 font-normal shrink-0">
+                <button type="button" onClick={selectAll} className="text-brand hover:underline">Semua</button>
+                <button type="button" onClick={deselectAll} className="text-brand hover:underline">Hapus</button>
+              </div>
+            </div>
             {filtered.map(([k, l]) => (
               <label key={k} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer text-[11px] hover:bg-bg-app">
                 <input type="checkbox" checked={isChk(k)} onChange={() => toggle(k)} />

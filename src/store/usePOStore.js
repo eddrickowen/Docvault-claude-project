@@ -163,8 +163,9 @@ export const usePOStore = create((set, get) => ({
 
   deleteItem: (id) => set((s) => {
     const newItems = s.items.filter((x) => x.id !== id);
-    save(K.items, newItems);
-    return { items: newItems };
+    const newPos = syncPOStatuses(s.pos, newItems);
+    save(K.items, newItems); save(K.pos, newPos);
+    return { items: newItems, pos: newPos };
   }),
 
   /* ════════ Supplier CRUD ════════ */
@@ -232,8 +233,9 @@ export const usePOStore = create((set, get) => ({
       const newStatus = total >= i.qty ? "delivered" : total > 0 ? "partial" : "ordered";
       return { ...i, doNos: newDoNos, status: newStatus };
     });
-    save(K.dos, newDos); save(K.items, newItems);
-    return { dos: newDos, items: newItems };
+    const newPos = syncPOStatuses(s.pos, newItems);
+    save(K.dos, newDos); save(K.items, newItems); save(K.pos, newPos);
+    return { dos: newDos, items: newItems, pos: newPos };
   }),
 
   /* ════════ Settings ════════ */
