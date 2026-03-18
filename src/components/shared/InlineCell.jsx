@@ -23,11 +23,11 @@ export function InlineCell({ value, onSave, type = "text", mono, width, placehol
   useEffect(() => {
     if (!editing) return;
     const h = (e) => {
-      if (!popRef.current?.contains(e.target) && !spanRef.current?.contains(e.target)) cancel();
+      if (!popRef.current?.contains(e.target) && !spanRef.current?.contains(e.target)) commit(v);
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
-  }, [editing]);
+  }, [editing, v]);
 
   const openEdit = () => {
     const r = spanRef.current?.getBoundingClientRect();
@@ -80,6 +80,7 @@ export function InlineCell({ value, onSave, type = "text", mono, width, placehol
                 value={v}
                 onChange={(e) => setV(e.target.value)}
                 onFocus={(e) => setTimeout(() => e.target.select(), 0)}
+                onBlur={() => commit(v)}
                 onKeyDown={(e) => { if (e.key === "Enter") commit(v); if (e.key === "Escape") cancel(); }}
                 className={`text-xs border border-border-strong rounded-md bg-surface outline-none focus:border-brand px-2 py-1 flex-1 ${mono ? "font-mono" : ""}`}
                 style={{ minWidth: 120 }}

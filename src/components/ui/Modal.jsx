@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Ico, IC } from "./Icon";
 
 /**
@@ -5,6 +6,14 @@ import { Ico, IC } from "./Icon";
  * Props: open, onClose, title, children, wide, xwide, noPad
  */
 export function Modal({ open, onClose, title, children, wide, xwide, noPad }) {
+  /* ── Escape key closes modal ── */
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const widthClass = xwide

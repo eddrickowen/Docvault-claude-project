@@ -97,22 +97,35 @@ export const mapPOSt = (s) => CSV_PO_ST[(s || "").toLowerCase().trim()] || "draf
 export const mapItemSt = (s) => CSV_IT_ST[(s || "").toLowerCase().trim()] || "pending";
 
 /* ── DO Number Formatting ── */
-export const formatDO = (fmt, seq) => {
+export const formatDO = (seq) => {
   const n = new Date();
-  return (fmt || "DO/{YYYY}/{NNN}")
-    .replace(/{YYYY}/g, n.getFullYear())
-    .replace(/{YY}/g, String(n.getFullYear()).slice(2))
-    .replace(/{MM}/g, String(n.getMonth() + 1).padStart(2, "0"))
-    .replace(/{NNN}/g, String(seq).padStart(3, "0"))
-    .replace(/{NN}/g, String(seq).padStart(2, "0"))
-    .replace(/{N}/g, String(seq));
+  const yy = String(n.getFullYear()).slice(2);
+  const mm = String(n.getMonth() + 1).padStart(2, "0");
+  return `${seq}/DO/API/${mm}/${yy}`;
 };
 
-export const nextDOSeq = (dos) => {
-  const nums = (dos || []).flatMap((d) =>
-    (d.doNo || "").split(/[\/\-_]/).filter((p) => /^\d{2,}$/.test(p)).map(Number)
-  ).filter((n) => !isNaN(n));
-  return nums.length ? Math.max(...nums) + 1 : 1;
+export const formatInvoice = (seq) => {
+  const n = new Date();
+  const yyyy = n.getFullYear();
+  const mm = String(n.getMonth() + 1).padStart(2, "0");
+  return `${seq}/API/MDN/${mm}/${yyyy}`;
+};
+
+export const nextSeq = (list, key) => {
+  const nums = (list || []).map(x => {
+    const parts = (x[key] || "").split("/");
+    return Number(parts[0]);
+  }).filter(n => !isNaN(n));
+  return nums.length ? Math.max(...nums) + 1 : 1600; // Starting from a standard ERP offset if empty
+};
+
+export const nextDOSeq  = (dos) => nextSeq(dos, "doNo");
+export const nextInvSeq = (items) => {
+  const nums = items.map(i => {
+    const parts = (i.invoiceNo || "").split("/");
+    return Number(parts[0]);
+  }).filter(n => !isNaN(n));
+  return nums.length ? Math.max(...nums) + 1 : 1600;
 };
 
 /* ── Quantity Helpers ── */
@@ -133,7 +146,7 @@ export const fmt = (n) => {
     let [intP, decP] = Number(n).toFixed(2).split(".");
     intP = intP.replace(/\B(?=(\d{3})+(?!\d))/g, tSep);
     
-    const formattedNum = Number(decP) > 0 ? `${intP}${dSep}${decP}` : intP;
+    const formattedNum = `${intP}${dSep}${decP}`;
     return curr ? `${curr} ${formattedNum}` : formattedNum;
   } catch(e) {
     return n != null && !isNaN(n)

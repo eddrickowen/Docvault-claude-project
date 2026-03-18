@@ -20,21 +20,15 @@ export function SmartDate({ value, onChange, placeholder, className }) {
     <div className="relative flex items-center gap-0">
       <input
         value={display}
-        onChange={(e) => setRaw(e.target.value)}
+        readOnly
+        onClick={() => pickerRef.current?.showPicker?.() || pickerRef.current?.click()}
         onFocus={() => {
           setFocused(true);
-          setRaw(value || "");
-          setTimeout((e) => e && e.select(), 0);
+          pickerRef.current?.showPicker?.() || pickerRef.current?.click();
         }}
-        onBlur={() => {
-          setFocused(false);
-          const p = parseSmartDate(raw);
-          if (p) onChange(p);
-          else if (!raw.trim()) onChange("");
-          setRaw("");
-        }}
-        placeholder={focused ? "DD/MM/YY atau YYYY-MM-DD" : placeholder || "Pilih tanggal..."}
-        className={`${inputCls} pr-[30px] ${className || ""}`}
+        onBlur={() => setFocused(false)}
+        placeholder={placeholder || "Pilih tanggal..."}
+        className={`${inputCls} pr-[30px] cursor-pointer ${className || ""}`}
       />
       <button
         type="button"

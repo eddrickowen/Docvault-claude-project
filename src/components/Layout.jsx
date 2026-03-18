@@ -10,7 +10,7 @@ import { isIncompletePO, isOverdue, today } from "../lib/helpers";
 
 const NAV = [
   { id: "dashboard", label: "Dashboard",        icon: IC.dash  },
-  { id: "po",        label: "Purchase Orders",  icon: IC.po    },
+  { id: "po",        label: "Purchase Orders",  icon: IC.po,   kbd: "N" },
   { id: "items",     label: "Semua Item",        icon: IC.box   },
   { id: "supplier",  label: "Supplier",          icon: IC.users },
   { id: "margin",    label: "Margin Analysis",   icon: IC.stats },
@@ -21,7 +21,7 @@ const NAV = [
 const navActiveBtn = "flex items-center gap-2 w-full px-2 py-1.5 rounded border-none text-[13px] font-bold transition-all duration-120 mb-0.5 whitespace-nowrap overflow-hidden bg-blue-900 text-white";
 const navIdleBtn  = "flex items-center gap-2 w-full px-2 py-1.5 rounded border-none text-[13px] font-medium transition-all duration-120 mb-0.5 whitespace-nowrap overflow-hidden bg-transparent text-slate-400 hover:bg-slate-800";
 
-export function Layout({ view, setView, children }) {
+export function Layout({ view, setView, onJump, children }) {
   const { pos, items, suppliers } = usePOStore();
   const [sideCollapsed, setSideCollapsed] = useState(false);
   const [hideAlert,    setHideAlert]    = useState(false);
@@ -46,12 +46,16 @@ export function Layout({ view, setView, children }) {
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         setView("po");
-        setTimeout(() => document.getElementById("btn-new-po")?.click(), 100);
+        usePOStore.getState().setTriggerNewPO(true);
       }
       if (e.key === "/") {
         e.preventDefault();
-        setView("po");
-        setTimeout(() => document.getElementById("po-search-input")?.focus(), 100);
+        // Look for any visible search input
+        const searchInput = document.querySelector("input[placeholder*='Cari'], input[type='search']");
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
       }
     };
     document.addEventListener("keydown", h);
@@ -71,7 +75,12 @@ export function Layout({ view, setView, children }) {
           </span>
           <Btn
             size="sm" variant="ghost"
-            onClick={() => { setView("po"); setHideIncAlert(true); }}
+            onClick={() => { 
+              const firstId = incompletePOs[0]?.id;
+              if (onJump && firstId) onJump("po", firstId);
+              else setView("po");
+              setHideIncAlert(true); 
+            }}
             className="!bg-white/20 !border-white/40 !text-white hover:!bg-white/30"
           >
             Lihat PO
@@ -96,7 +105,12 @@ export function Layout({ view, setView, children }) {
           </span>
           <Btn
             size="sm" variant="ghost"
-            onClick={() => { setView("po"); setHideAlert(true); }}
+            onClick={() => { 
+              const firstId = overduePOs[0]?.id;
+              if (onJump && firstId) onJump("po", firstId);
+              else setView("po");
+              setHideAlert(true); 
+            }}
             className="!bg-white/20 !border-white/40 !text-white hover:!bg-white/30"
           >
             Lihat PO
@@ -149,7 +163,16 @@ export function Layout({ view, setView, children }) {
                   className={active ? navActiveBtn : navIdleBtn}
                 >
                   <Ico d={n.icon} size={14} color={active ? "#fff" : "#64748b"} />
-                  {!sideCollapsed && <span className="flex-1 truncate">{n.label}</span>}
+                  {!sideCollapsed && (
+                    <>
+                      <span className="flex-1 truncate">{n.label}</span>
+                      {n.kbd && (
+                        <kbd className="ml-auto text-[9px] font-mono font-bold bg-slate-700/60 text-slate-400 rounded px-1.5 py-0.5 border border-slate-600/50 leading-none shrink-0">
+                          {n.kbd}
+                        </kbd>
+                      )}
+                    </>
+                  )}
                 </button>
               );
             })}

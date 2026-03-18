@@ -23,7 +23,7 @@ export function DOGeneratorModal({ po, preSelect = new Set(), items, dos, settin
   const fields = (settings.doFields || DEFAULT_DO_FIELDS).filter((f) => f.enabled);
 
   const [form, setForm] = useState({
-    doNo: formatDO(settings.doFormat, nextDOSeq(dos)),
+    doNo: formatDO(nextSeq(dos, "doNo")),
     deliveryDate: today(),
     fieldValues: Object.fromEntries(fields.map((f) => [f.key, ""])),
   });

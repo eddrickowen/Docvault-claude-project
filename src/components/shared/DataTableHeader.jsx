@@ -23,7 +23,7 @@ export function DataTableHeader({
   return (
     <thead>
       <tr>
-        <th className={`${thCls} w-9 ${stickyL}`}>
+        <th className={`${thCls} w-9 sticky top-0 left-0 bg-surface z-[12] shadow-[3px_0_6px_rgba(0,0,0,0.05)]`}>
           <input
             type="checkbox"
             checked={
@@ -35,7 +35,7 @@ export function DataTableHeader({
             onChange={(e) => {
               const s = new Set(bulkSel);
               paged.forEach((p) => {
-                getRowIds(p).forEach((id) => {
+    getRowIds(p).forEach((id) => {
                   if (e.target.checked) s.add(id);
                   else s.delete(id);
                 });
@@ -45,7 +45,15 @@ export function DataTableHeader({
           />
         </th>
         {cols.map(({ col, label, ft, fk, noSort, keyFn, labelFn }) => (
-          <th key={col} className={thCls} onClick={!noSort ? () => toggleSort(col) : undefined}>
+          <th
+            key={col}
+            className={`${thCls} sticky top-0 z-[10] bg-surface shadow-[0_1px_0_var(--color-border-default)] cursor-pointer select-none group`}
+            onClick={!noSort ? () => {
+              if (sort.col !== col) toggleSort(col, "asc");
+              else if (sort.dir === "asc") toggleSort(col, "desc");
+              else toggleSort(null, null); // Return to normal
+            } : undefined}
+          >
             <div className="flex items-center gap-1">
               {label}{!noSort && <SortIco col={col} />}
               {ft === "col" && (
@@ -63,7 +71,7 @@ export function DataTableHeader({
           </th>
         ))}
         {hasActions && (
-          <th className={`${thCls} w-[76px] ${stickyR} z-[4]`}>Aksi</th>
+          <th className={`${thCls} w-[76px] sticky top-0 right-0 bg-surface z-[12] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]`}>Aksi</th>
         )}
       </tr>
     </thead>

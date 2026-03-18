@@ -88,7 +88,7 @@ export function ItemTableRow({
       </td>
 
       {/* Status Pill */}
-      <td className={tdCls} onClick={(e) => e.stopPropagation()}>
+      <td className={`${tdCls} status-select-fix`} onClick={(e) => e.stopPropagation()}>
         <SPill value={item.status} onChange={(v) => onUpdate({ ...item, status: v })} cfg={ITEM_STATUS} mini />
       </td>
 
@@ -159,12 +159,12 @@ export function ItemTableRow({
       </td>
 
       {/* Action Buttons */}
-      <td className={`${tdCls} ${stickyR} ${rowBg} !p-[4px_6px]`}>
-        <div className="flex gap-[3px] flex-wrap justify-end">
-          <Btn size="sm" variant="ghost" title="Edit Item" className="!p-0 w-[24px] h-[24px] justify-center" onClick={() => onEdit(item)}>
+      <td className={`${tdCls} ${stickyR} ${rowBg} !p-[4px_4px]`}>
+        <div className="grid grid-cols-2 gap-1 justify-items-end">
+          <Btn size="sm" variant="ghost" title="Edit Item" className="!p-0 w-[22px] h-[22px] justify-center" onClick={() => onEdit(item)}>
             <Ico d={IC.edit} size={10} />
           </Btn>
-          <Btn size="sm" variant="danger" title="Hapus Item" className="!p-0 w-[24px] h-[24px] justify-center" onClick={() => onDelete(item)}>
+          <Btn size="sm" variant="danger" title="Hapus Item" className="!p-0 w-[22px] h-[22px] justify-center" onClick={() => onDelete(item)}>
             <Ico d={IC.trash} size={10} />
           </Btn>
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { Ico, IC, FIn } from "../components/ui";
 import { CopyTSVButton } from "../components/shared";
 import { usePOStore } from "../store/usePOStore";
@@ -23,6 +23,7 @@ export function MarginAnalysis() {
   const [search,  setSearch]  = useState("");
   const [sortCol, setSortCol] = useState("net");
   const [sortDir, setSortDir] = useState("desc");
+  const [expRows, setExpRows]  = useState(new Set());
 
   const poById = useMemo(() => {
     const map = {};
@@ -127,9 +128,19 @@ export function MarginAnalysis() {
               const buyCls  = g.buy > 0 ? "text-orange" : "text-text-muted";
               const mgCls   = g.buy > 0 ? (g.margin >= 0 ? "text-green" : "text-red") : "text-text-muted";
               const pctCls  = pct === null ? "text-text-muted" : pct >= 20 ? "text-green" : pct >= 10 ? "text-amber" : "text-red";
+              const isExp   = expRows.has(g.key);
               return (
-                <tr key={g.key} className={`transition-colors ${rowBg}`}>
-                  <td className={`${tdCls} font-semibold truncate max-w-[220px]`} title={g.key}>{g.key}</td>
+                <Fragment key={g.key}>
+                <tr
+                  className={`transition-colors cursor-pointer ${rowBg} ${isExp ? '!bg-brand-soft' : ''}`}
+                  onClick={() => { const s = new Set(expRows); isExp ? s.delete(g.key) : s.add(g.key); setExpRows(s); }}
+                >
+                  <td className={`${tdCls} font-semibold truncate max-w-[220px]`} title={g.key}>
+                    <div className="flex items-center gap-1.5">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-brand)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 transition-transform ${isExp ? 'rotate-90' : ''}`}><path d="M9 18l6-6-6-6" /></svg>
+                      <span className="truncate">{g.key}</span>
+                    </div>
+                  </td>
                   <td className={`${tdCls} text-right font-mono font-semibold whitespace-nowrap ${netCls}`}>{fmt(g.net)}</td>
                   <td className={`${tdCls} text-right font-mono whitespace-nowrap ${buyCls}`}>{g.buy > 0 ? fmt(g.buy) : "–"}</td>
                   <td className={`${tdCls} text-right font-mono font-bold whitespace-nowrap ${mgCls}`}>{g.buy > 0 ? fmt(g.margin) : "–"}</td>
@@ -137,6 +148,31 @@ export function MarginAnalysis() {
                   <td className={`${tdCls} text-center`}>{g.items.length}</td>
                   <td className={`${tdCls} text-[10px] text-text-muted`}>{g.noPrice > 0 ? `${g.noPrice} item tanpa harga beli` : ""}</td>
                 </tr>
+                {isExp && g.items.map((item, idx) => {
+                  const iNet = itemNet(item);
+                  const iBuy = itemBuy(item);
+                  const iMg = itemMargin(item);
+                  const iPct = iNet > 0 && iBuy > 0 ? iMg / iNet * 100 : null;
+                  const iBg = idx % 2 === 0 ? "bg-blue-50/50" : "bg-white";
+                  const iMgCls = iMg === null ? "text-text-muted" : iMg >= 0 ? "text-green" : "text-red";
+                  const iPctCls = iPct === null ? "text-text-muted" : iPct >= 20 ? "text-green" : iPct >= 10 ? "text-amber" : "text-red";
+                  const po = poById[item.poId];
+                  return (
+                    <tr key={item.id} className={`${iBg} border-l-2 border-l-brand/20`}>
+                      <td className={`${tdCls} pl-7 text-text-secondary`}>
+                        <div className="text-[11px] font-medium">{item.itemName}</div>
+                        <div className="text-[9px] text-text-muted">{item.qty} {item.unit} · {po?.orderNo || ""}</div>
+                      </td>
+                      <td className={`${tdCls} text-right font-mono text-brand whitespace-nowrap`}>{fmt(iNet)}</td>
+                      <td className={`${tdCls} text-right font-mono whitespace-nowrap ${iBuy > 0 ? "text-orange" : "text-text-muted"}`}>{iBuy > 0 ? fmt(iBuy) : "–"}</td>
+                      <td className={`${tdCls} text-right font-mono font-semibold whitespace-nowrap ${iMgCls}`}>{iMg !== null ? fmt(iMg) : "–"}</td>
+                      <td className={`${tdCls} text-right ${iPctCls}`}>{iPct !== null ? `${iPct.toFixed(1)}%` : "–"}</td>
+                      <td className={`${tdCls} text-center text-text-muted`}>1</td>
+                      <td className={tdCls} />
+                    </tr>
+                  );
+                })}
+                </Fragment>
               );
             })}
             <tr className="bg-brand-soft">

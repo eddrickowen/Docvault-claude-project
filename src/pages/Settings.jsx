@@ -35,6 +35,10 @@ export function Settings() {
   const [localHsDB, setLocalHsDB] = useState(hsDB);
   const [newHsCode, setNewHsCode] = useState("");
   const [newHsDesc, setNewHsDesc] = useState("");
+  const [newUom,    setNewUom]    = useState("");
+  const [coSearch,   setCoSearch]   = useState("");
+  const [hsSearch,   setHsSearch]   = useState("");
+  const [uomSearch,  setUomSearch]  = useState("");
   const [doFields,  setDoFields]  = useState(settings?.doFields || DEFAULT_DO_FIELDS);
   const [itemSearch, setItemSearch] = useState(settings?.itemSearchConfig || {
     includeItemName: true,
@@ -107,12 +111,20 @@ export function Settings() {
       setLocalHsDB(n); saveHsDB(n); setNewHsCode(""); setNewHsDesc("");
     }
   };
+  const addUom = () => {
+    if (newUom.trim()) {
+      const { uom, saveUom } = usePOStore.getState();
+      const n = [...uom, { v: newUom.toLowerCase().trim(), l: newUom.trim() }];
+      saveUom(n); setNewUom("");
+    }
+  };
 
   const tabs = [
     { id: "general", label: "Umum & Organisasi", icon: IC.cog },
     { id: "lists", label: "Daftar Referensi", icon: IC.tag },
     { id: "templates", label: "Templates & Export", icon: IC.export },
     { id: "hscode", label: "HS Code Database", icon: IC.box },
+    { id: "headers", label: "Label Kustom", icon: IC.tag },
   ];
 
   return (
@@ -249,9 +261,11 @@ export function Settings() {
           {activeTab === "lists" && (
             <div className="flex flex-col gap-5">
               <div className={cardCls}>
-                <div className="text-[14px] font-bold text-text-primary mb-3">Daftar Perusahaan (Client/PO)</div>
-                <div className="flex flex-col gap-2 mb-4">
-                  {(cos || []).map((c, i) => (
+                <div className="flex flex-col gap-2 mb-4 max-h-[250px] overflow-y-auto pr-1">
+                  <div className="mb-2">
+                    <FIn value={coSearch} onChange={setCoSearch} placeholder="Cari perusahaan..." className="!py-1 !px-2 !text-xs" />
+                  </div>
+                  {(cos || []).filter(c => String(c.name || c).toLowerCase().includes(coSearch.toLowerCase())).map((c, i) => (
                     <div key={i} className={listRowCls}>
                       <Ico d={IC.users} size={14} color="var(--color-text-muted)" className="opacity-50" />
                       <span className="flex-1 text-[13px] font-semibold text-text-primary">{typeof c === 'object' ? c.name : c}</span>
@@ -265,9 +279,34 @@ export function Settings() {
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
                     <Ico d={IC.plus} size={12} color="var(--color-text-muted)" className="absolute left-3 top-1/2 -translate-y-1/2" />
-                    <FIn value={newCo} onChange={setNewCo} placeholder="Tambahkan perusahaan baru..." className="pl-8" onKeyDown={(e) => e.key === "Enter" && addCo()} />
+                    <FIn value={newCo} onChange={setNewCo} placeholder="Tambahkan perusahaan baru..." className="pl-8 !py-1.5" onKeyDown={(e) => e.key === "Enter" && addCo()} />
                   </div>
-                  <Btn onClick={addCo} variant="secondary">Tambah</Btn>
+                  <Btn onClick={addCo} variant="secondary" size="sm">Tambah</Btn>
+                </div>
+              </div>
+
+              <div className={cardCls}>
+                <div className="text-[14px] font-bold text-text-primary mb-3">Unit of Measure (UOM)</div>
+                <div className="flex flex-col gap-2 mb-4 max-h-[200px] overflow-y-auto pr-1">
+                  <div className="mb-2">
+                    <FIn value={uomSearch} onChange={setUomSearch} placeholder="Cari UOM..." className="!py-1 !px-2 !text-xs" />
+                  </div>
+                  {(usePOStore.getState().uom || []).filter(u => u.l.toLowerCase().includes(uomSearch.toLowerCase())).map((u, i) => (
+                    <div key={i} className={listRowCls}>
+                      <span className="flex-1 text-[13px] font-semibold text-text-primary">{u.l} ({u.v})</span>
+                      <Btn size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 hover:text-red transition-opacity" onClick={() => { 
+                        const old = usePOStore.getState().uom;
+                        const n = old.filter((_, j) => j !== i); 
+                        usePOStore.getState().saveUom(n);
+                      }}>
+                        <Ico d={IC.trash} size={12} />
+                      </Btn>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <FIn value={newUom} onChange={setNewUom} placeholder="UOM Baru (Pcs, Box...)" className="!py-1.5" onKeyDown={(e) => e.key === "Enter" && addUom()} />
+                  <Btn onClick={addUom} variant="secondary" size="sm">Tambah</Btn>
                 </div>
               </div>
 
@@ -376,10 +415,16 @@ export function Settings() {
                 <Btn size="sm" variant="blue" onClick={() => { saveHsDB(localHsDB); toast("✓ HS Code disimpan"); }}><Ico d={IC.save} size={11} /> Update DB</Btn>
               </div>
               
-              <div className="flex gap-2 items-center mb-4 bg-surface-alt p-3 rounded-lg border border-border-default">
-                <FIn value={newHsCode} onChange={setNewHsCode} placeholder="Ketik Kode (Mis: 8481.20)" className="w-[180px] font-mono text-sm" />
-                <FIn value={newHsDesc} onChange={setNewHsDesc} placeholder="Deskripsi/Nama Barang Singkat..." className="flex-1" onKeyDown={(e) => e.key === "Enter" && addHs()} />
-                <Btn onClick={addHs}><Ico d={IC.plus} size={11} /> Tambah Code</Btn>
+              <div className="flex flex-col gap-3 mb-4 bg-surface-alt p-3 rounded-lg border border-border-default">
+                <div className="flex gap-2 items-center">
+                  <Ico d={IC.search} size={14} color="var(--color-text-muted)" />
+                  <FIn value={hsSearch} onChange={setHsSearch} placeholder="Cari HS Code atau Deskripsi..." className="flex-1 !py-1 text-xs" />
+                </div>
+                <div className="flex gap-2 items-center">
+                  <FIn value={newHsCode} onChange={setNewHsCode} placeholder="Ketik Kode (Mis: 8481.20)" className="w-[180px] font-mono text-sm" />
+                  <FIn value={newHsDesc} onChange={setNewHsDesc} placeholder="Deskripsi/Nama Barang Singkat..." className="flex-1" onKeyDown={(e) => e.key === "Enter" && addHs()} />
+                  <Btn onClick={addHs} size="sm"><Ico d={IC.plus} size={11} /> Tambah Code</Btn>
+                </div>
               </div>
 
               <div className="max-h-[400px] overflow-y-auto border border-border-default rounded-md bg-white">
@@ -395,10 +440,30 @@ export function Settings() {
                     {!(localHsDB || []).length && (
                       <tr><td colSpan={3} className="py-8 text-center text-sm text-text-muted italic">Database HS Code masih kosong.</td></tr>
                     )}
-                    {(localHsDB || []).map((h, i) => (
+                    {(localHsDB || []).filter(h => h.code.includes(hsSearch) || h.desc.toLowerCase().includes(hsSearch.toLowerCase())).map((h, i) => (
                       <tr key={i} className="border-b border-border-default hover:bg-surface-alt group">
-                        <td className="py-2 px-4"><span className="font-mono text-[12px] font-bold text-brand bg-brand-soft px-2 py-0.5 rounded">{h.code}</span></td>
-                        <td className="py-2 px-4 text-[13px] text-text-primary">{h.desc}</td>
+                        <td className="py-2 px-4">
+                          <input 
+                            className="font-mono text-[12px] font-bold text-brand bg-brand-soft px-2 py-0.5 rounded outline-none w-full border border-transparent focus:border-brand-mid"
+                            value={h.code}
+                            onChange={(e) => {
+                              const n = [...localHsDB];
+                              n[i] = { ...n[i], code: e.target.value };
+                              setLocalHsDB(n);
+                            }}
+                          />
+                        </td>
+                        <td className="py-2 px-4 text-[13px] text-text-primary">
+                          <input 
+                            className="w-full bg-transparent outline-none border border-transparent focus:border-brand-mid px-1 py-0.5 rounded"
+                            value={h.desc}
+                            onChange={(e) => {
+                              const n = [...localHsDB];
+                              n[i] = { ...n[i], desc: e.target.value };
+                              setLocalHsDB(n);
+                            }}
+                          />
+                        </td>
                         <td className="py-2 px-4 text-right">
                           <Btn size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 hover:text-red transition-all !p-1 w-6 h-6 justify-center" onClick={() => { const n = localHsDB.filter((_, j) => j !== i); setLocalHsDB(n); saveHsDB(n); }}>
                             <Ico d={IC.trash} size={12} />
@@ -412,6 +477,26 @@ export function Settings() {
             </div>
           )}
 
+          {/* TAB 5: CUSTOM LABELS */}
+          {activeTab === "headers" && (
+            <div className={cardCls}>
+              <div className="text-[14px] font-bold text-text-primary mb-4 pb-2 border-b border-border-default">Konfigurasi Label Header Kontainer</div>
+              <div className="flex flex-col gap-4">
+                <FF label="Label PO (Aplikasi)" hint="Default: Purchase Orders">
+                  <FIn value={s.labelPO || "Purchase Orders"} onChange={(v) => setS(p => ({ ...p, labelPO: v }))} />
+                </FF>
+                <FF label="Label Item (Aplikasi)" hint="Default: Semua Item">
+                  <FIn value={s.labelItem || "Semua Item"} onChange={(v) => setS(p => ({ ...p, labelItem: v }))} />
+                </FF>
+                <FF label="Label NO PO pada Tabel" hint="Default: NO PO/ORDER">
+                  <FIn value={s.labelNoPO || "NO PO/ORDER"} onChange={(v) => setS(p => ({ ...p, labelNoPO: v }))} />
+                </FF>
+                <FF label="Label Nama Barang pada Tabel" hint="Default: NAMA ITEM">
+                  <FIn value={s.labelItemName || "NAMA ITEM"} onChange={(v) => setS(p => ({ ...p, labelItemName: v }))} />
+                </FF>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

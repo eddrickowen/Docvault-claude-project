@@ -29,8 +29,20 @@ export function DateRangeFilter({ active, onApply, label }) {
     if (k === "bulan_ini") f = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
     else if (k === "bulan_lalu") { const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); f = d.toISOString().slice(0, 10); t = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10); }
     else if (k === "3_bulan") { const d = new Date(); d.setMonth(d.getMonth() - 3); f = d.toISOString().slice(0, 10); }
+    else if (k === "6_bulan") { const d = new Date(); d.setMonth(d.getMonth() - 6); f = d.toISOString().slice(0, 10); }
     else if (k === "tahun_ini") f = `${now.getFullYear()}-01-01`;
     onApply({ from: f, to: t }); setOpen(false);
+  };
+
+  const applyMonthYear = (m, y) => {
+    if (m === -1) {
+      onApply({ from: `${y}-01-01`, to: `${y}-12-31` });
+    } else {
+      const f = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+      const t = new Date(y, m + 1, 0).toISOString().slice(0, 10);
+      onApply({ from: f, to: t });
+    }
+    setOpen(false);
   };
 
   useEffect(() => {
@@ -56,28 +68,69 @@ export function DateRangeFilter({ active, onApply, label }) {
         <Ico d={IC.cal} size={10} color={active ? "var(--color-brand)" : "var(--color-border-strong)"} />
       </button>
       {open && (
-        <div ref={dropRef} className={`${dropBase} w-[270px] p-3`} style={{ top: pos.top, left: pos.left }}>
-          <div className="text-[10px] font-bold text-text-secondary mb-2 uppercase tracking-wide">
-            Filter Tanggal{label ? " · " + label : ""}
+        <div ref={dropRef} className={`${dropBase} w-[280px] p-4`} style={{ top: pos.top, left: pos.left }}>
+          <div className="text-[10px] font-bold text-text-secondary mb-3 uppercase tracking-wide flex items-center gap-2">
+            <Ico d={IC.cal} size={10} /> Filter Periode{label ? " · " + label : ""}
           </div>
-          <div className="flex flex-wrap gap-1 mb-2.5">
-            {[["bulan_ini", "Bulan Ini"], ["bulan_lalu", "Bulan Lalu"], ["3_bulan", "3 Bulan"], ["tahun_ini", "Tahun Ini"]].map(([k, l]) => (
-              <button key={k} onClick={() => applyQuick(k)} className={quickBtn}>{l}</button>
+          
+          <div className="mb-4">
+            <div className="text-[9px] font-bold text-text-muted uppercase mb-2 px-1">Pilih Bulan & Tahun</div>
+            <div className="flex gap-2">
+              <select 
+                className={`${inputCls} !py-1 text-xs`}
+                onChange={(e) => {
+                  const m = Number(e.target.value);
+                  const y = now.getFullYear(); // Default current year or we could add a year select
+                  applyMonthYear(m, y);
+                }}
+                defaultValue=""
+              >
+                <option value="" disabled>Pilih Bulan...</option>
+                <option value={-1}>Satu Tahun Penuh</option>
+                {["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"].map((m, i) => (
+                  <option key={m} value={i}>{m}</option>
+                ))}
+              </select>
+              <select 
+                className={`${inputCls} !py-1 text-xs w-[100px]`}
+                onChange={(e) => {
+                  const y = Number(e.target.value);
+                  applyMonthYear(-1, y);
+                }}
+                defaultValue={now.getFullYear()}
+              >
+                {[0,1,2,3].map(i => {
+                  const y = now.getFullYear() - i;
+                  return <option key={y} value={y}>{y}</option>;
+                })}
+              </select>
+            </div>
+          </div>
+
+          <div className="text-[9px] font-bold text-text-muted uppercase mb-2 px-1">Cepat</div>
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {[["bulan_ini", "Bulan Ini"], ["bulan_lalu", "Lalu"], ["3_bulan", "3 bln"], ["tahun_ini", "Thn Ini"]].map(([k, l]) => (
+              <button key={k} onClick={() => applyQuick(k)} className={`${quickBtn} hover:bg-brand-soft hover:text-brand hover:border-brand-mid transition-colors`}>{l}</button>
             ))}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <div>
-              <div className="text-[10px] text-text-secondary mb-1">Dari</div>
-              <SmartDate value={from} onChange={setFrom} />
+
+          <div className="text-[9px] font-bold text-text-muted uppercase mb-2 px-1">Custom Range</div>
+          <div className="flex flex-col gap-2 p-2 bg-bg-app/50 rounded-lg border border-border-default">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-text-secondary w-10">Dari:</span>
+              <div className="flex-1"><SmartDate value={from} onChange={setFrom} /></div>
             </div>
-            <div>
-              <div className="text-[10px] text-text-secondary mb-1">Sampai</div>
-              <SmartDate value={to} onChange={(v) => { setTo(v); if (v && (from || v)) { onApply({ from, to: v }); setOpen(false); } }} />
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-text-secondary w-10">Ke:</span>
+              <div className="flex-1">
+                <SmartDate value={to} onChange={(v) => { setTo(v); if (v && from) { onApply({ from, to: v }); setOpen(false); } }} />
+              </div>
             </div>
           </div>
-          <div className="flex gap-1.5 mt-2.5">
-            <Btn size="sm" variant="ghost" onClick={() => { onApply(null); setOpen(false); }} className="flex-1">Clear</Btn>
-            <Btn size="sm" onClick={() => { if (from || to) onApply({ from, to }); setOpen(false); }} className="flex-1">OK</Btn>
+
+          <div className="flex gap-2 mt-4 pt-3 border-t border-border-default">
+            <Btn size="sm" variant="ghost" onClick={() => { onApply(null); setOpen(false); }} className="flex-1">Reset</Btn>
+            <Btn size="sm" onClick={() => { if (from || to) onApply({ from, to }); setOpen(false); }} className="flex-1">Terapkan</Btn>
           </div>
         </div>
       )}

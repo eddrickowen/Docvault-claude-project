@@ -7,7 +7,7 @@ import { create } from "zustand";
 import { get as idbGet, set as idbSet } from "idb-keyval";
 import {
   INIT_POS, INIT_ITEMS, INIT_SUPPLIERS, INIT_DOS,
-  INIT_COMPANIES, INIT_ZONE_TYPES, INIT_SETTINGS, INIT_HS_DB,
+  INIT_COMPANIES, INIT_ZONE_TYPES, INIT_SETTINGS, INIT_HS_DB, UOM_OPTIONS,
   STATUS_RANK,
 } from "../lib/constants";
 import { today } from "../lib/helpers";
@@ -22,6 +22,7 @@ const K = {
   zoneTypes: "po66_zones",
   settings: "po66_settings",
   hsDB: "po66_hsdb",
+  uom: "po66_uom",
 };
 
 /* ── Load one key: IDB first, fallback localStorage → IDB, then init value ── */
@@ -49,37 +50,70 @@ function save(key, val) {
  * No side-effects — pure function, called inside set() to keep state consistent.
  */
 function syncPOStatuses(pos, items) {
-  const updates = [];
-  pos.forEach((po) => {
-    if (["paid", "cancelled"].includes(po.status)) return;
-    const poItems = items.filter((i) => i.poId === po.id);
+  const newPos = [...pos];
+  const newItems = [...items];
+  let changed = false;
+
+  newPos.forEach((po, idx) => {
+    const poItems = newItems.filter((i) => i.poId === po.id);
     if (!poItems.length) return;
-    const allPaid = poItems.every((i) => i.status === "paid");
-    const allInv  = poItems.every((i) => ["invoiced", "paid"].includes(i.status));
-    const allDel  = poItems.every((i) => ["delivered", "invoiced", "paid"].includes(i.status));
-    let target = null;
-    if (allPaid) target = "paid";
-    else if (allInv) target = "invoiced";
-    else if (allDel) target = "delivered";
-    if (target && STATUS_RANK[target] > (STATUS_RANK[po.status] ?? 0))
-      updates.push({ ...po, status: target });
+
+    // PO -> Item Cascade
+    // If PO is set to a final state, all its items should follow.
+    if (["paid", "delivered", "invoiced", "cancelled"].includes(po.status)) {
+      poItems.forEach(item => {
+        if (item.status !== po.status && STATUS_RANK[po.status] > (STATUS_RANK[item.status] || 0)) {
+          const itemIdx = newItems.findIndex(i => i.id === item.id);
+          newItems[itemIdx] = { ...newItems[itemIdx], status: po.status };
+          changed = true;
+        }
+      });
+    }
+
+    // Item -> PO Sync
+    const statuses = poItems.map(i => i.status);
+    const allSame = statuses.every(s => s === statuses[0] && s !== "pending" && s !== "ordered");
+    
+    let targetPoStatus = po.status;
+    if (allSame) {
+      // If all items are in the same state, PO takes that state (with "ordered" mapping to "confirmed")
+      targetPoStatus = statuses[0] === "ordered" ? "confirmed" : statuses[0];
+    } else {
+      // Mixed states logic
+      const hasPaid = statuses.some(s => s === "paid");
+      const hasInv  = statuses.some(s => ["invoiced", "paid"].includes(s));
+      const hasDel  = statuses.some(s => ["delivered", "partial", "invoiced", "paid"].includes(s));
+      const hasOrd  = statuses.some(s => s === "ordered");
+
+      if (hasPaid) targetPoStatus = "partial_pay";
+      else if (hasInv) targetPoStatus = "invoiced"; 
+      else if (hasDel) targetPoStatus = "partial_del";
+      else if (hasOrd) targetPoStatus = "confirmed";
+    }
+
+    if (targetPoStatus !== po.status) {
+      newPos[idx] = { ...newPos[idx], status: targetPoStatus };
+      changed = true;
+    }
   });
-  if (!updates.length) return pos;
-  return pos.map((po) => updates.find((u) => u.id === po.id) ?? po);
+
+  return { pos: newPos, items: newItems, changed };
 }
 
 /* ════════════════════════════════════════════════════════════ */
 export const usePOStore = create((set, get) => ({
   /* ── State ── */
   pos: [], items: [], suppliers: [], dos: [],
-  companies: [], zoneTypes: [], settings: {}, hsDB: [],
+  companies: [], zoneTypes: [], settings: {}, hsDB: [], uom: [],
   _loaded: false,
   _toast: null, // { id, msg }
   jumpTargetPOId: null,
+  triggerNewPO: false,
+  setTriggerNewPO: (val) => set({ triggerNewPO: val }),
 
   /* ── Init: load all data from IDB (with localStorage migration) ── */
   init: async () => {
-    const [pos, items, suppliers, dos, companies, zoneTypes, settings, hsDB] =
+    const [pos, items, suppliers, dos, companies, zoneTypes, settings, hsDB, uom] =
       await Promise.all([
         loadKey(K.pos,       INIT_POS),
         loadKey(K.items,     INIT_ITEMS),
@@ -89,8 +123,9 @@ export const usePOStore = create((set, get) => ({
         loadKey(K.zoneTypes, INIT_ZONE_TYPES),
         loadKey(K.settings,  INIT_SETTINGS),
         loadKey(K.hsDB,      INIT_HS_DB),
+        loadKey(K.uom,       UOM_OPTIONS),
       ]);
-    set({ pos, items, suppliers, dos, companies, zoneTypes, settings, hsDB, _loaded: true });
+    set({ pos, items, suppliers, dos, companies, zoneTypes, settings, hsDB, uom, _loaded: true });
   },
 
   /* ── Toast ── */
@@ -149,23 +184,23 @@ export const usePOStore = create((set, get) => ({
     const newItems = s.items.find((x) => x.id === item.id)
       ? s.items.map((x) => (x.id === item.id ? item : x))
       : [...s.items, item];
-    const newPos = syncPOStatuses(s.pos, newItems);
-    save(K.items, newItems); save(K.pos, newPos);
-    return { items: newItems, pos: newPos };
+    const synced = syncPOStatuses(s.pos, newItems);
+    save(K.items, synced.items); save(K.pos, synced.pos);
+    return { items: synced.items, pos: synced.pos };
   }),
 
   updateItem: (item) => set((s) => {
     const newItems = s.items.map((x) => (x.id === item.id ? item : x));
-    const newPos = syncPOStatuses(s.pos, newItems);
-    save(K.items, newItems); save(K.pos, newPos);
-    return { items: newItems, pos: newPos };
+    const synced = syncPOStatuses(s.pos, newItems);
+    save(K.items, synced.items); save(K.pos, synced.pos);
+    return { items: synced.items, pos: synced.pos };
   }),
 
   deleteItem: (id) => set((s) => {
     const newItems = s.items.filter((x) => x.id !== id);
-    const newPos = syncPOStatuses(s.pos, newItems);
-    save(K.items, newItems); save(K.pos, newPos);
-    return { items: newItems, pos: newPos };
+    const synced = syncPOStatuses(s.pos, newItems);
+    save(K.items, synced.items); save(K.pos, synced.pos);
+    return { items: synced.items, pos: synced.pos };
   }),
 
   /* ════════ Supplier CRUD ════════ */
@@ -187,6 +222,12 @@ export const usePOStore = create((set, get) => ({
     const newSup = s.suppliers.map((sup) =>
       sup.id === id ? { ...sup, deletedAt: today() } : sup
     );
+    save(K.suppliers, newSup);
+    return { suppliers: newSup };
+  }),
+
+  deleteSupplier: (id) => set((s) => {
+    const newSup = s.suppliers.filter((x) => x.id !== id);
     save(K.suppliers, newSup);
     return { suppliers: newSup };
   }),
@@ -243,4 +284,5 @@ export const usePOStore = create((set, get) => ({
   saveCompanies: (companies) => set(() => { save(K.companies, companies); return { companies }; }),
   saveZoneTypes: (zoneTypes) => set(() => { save(K.zoneTypes, zoneTypes); return { zoneTypes }; }),
   saveHsDB:      (hsDB)      => set(() => { save(K.hsDB,      hsDB);      return { hsDB };      }),
+  saveUom:       (uom)       => set(() => { save(K.uom,       uom);       return { uom };       }),
 }));

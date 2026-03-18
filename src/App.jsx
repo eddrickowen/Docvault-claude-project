@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { usePOStore } from "./store/usePOStore";
 import { Layout } from "./components/Layout";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { useToast } from "./hooks";
 import {
   Dashboard,
@@ -40,9 +41,9 @@ export default function App() {
           if (el) {
             el.scrollIntoView({ block: "center", behavior: "smooth" });
             el.classList.add("row-hl");
-            setTimeout(() => el.classList.remove("row-hl"), 1800);
+            setTimeout(() => el.classList.remove("row-hl"), 2500);
           }
-        }, 150);
+        }, 300);
       }
     },
     [setJumpTargetPO],
@@ -50,21 +51,33 @@ export default function App() {
 
   if (!_loaded) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-bg-app text-text-secondary text-sm">
-        Memuat data…
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950 gap-5">
+        <div className="flex items-center gap-3">
+          <div className="loading-spinner" />
+          <div>
+            <div className="text-white text-sm font-black tracking-wider">PO MANAGER</div>
+            <div className="text-slate-500 text-xs font-medium">v6.6</div>
+          </div>
+        </div>
+        <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden">
+          <div className="h-full bg-brand rounded-full loading-bar" />
+        </div>
+        <span className="text-slate-500 text-xs font-medium animate-pulse">Memuat data…</span>
       </div>
     );
   }
 
   return (
-    <Layout view={view} setView={setView}>
-      <Toast />
-      {view === "dashboard" && <Dashboard onJump={handleJump} />}
-      {view === "po"        && <POList />}
-      {view === "items"     && <AllItems onJump={handleJump} />}
-      {view === "supplier"  && <SupplierPage onJump={handleJump} />}
-      {view === "margin"    && <MarginAnalysis />}
-      {view === "settings"  && <Settings />}
-    </Layout>
+    <ErrorBoundary>
+      <Layout view={view} setView={setView} onJump={handleJump}>
+        <Toast />
+        {view === "dashboard" && <Dashboard onJump={handleJump} />}
+        {view === "po"        && <POList />}
+        {view === "items"     && <AllItems onJump={handleJump} />}
+        {view === "supplier"  && <SupplierPage onJump={handleJump} />}
+        {view === "margin"    && <MarginAnalysis />}
+        {view === "settings"  && <Settings />}
+      </Layout>
+    </ErrorBoundary>
   );
 }

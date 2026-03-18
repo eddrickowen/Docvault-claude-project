@@ -46,6 +46,7 @@ export function FF({ label, span = 1, children, hint, required }) {
 export function FIn({
   value,
   onChange,
+  onBlur,
   type = "text",
   placeholder,
   readOnly,
@@ -57,17 +58,23 @@ export function FIn({
   autoFocus,
   id,
 }) {
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") e.target.blur();
+    onKeyDown?.(e);
+  };
+
   return (
     <input
       id={id}
       type={type}
       value={value ?? ""}
       onChange={(e) => onChange?.(e.target.value)}
+      onBlur={onBlur}
       placeholder={placeholder}
       readOnly={readOnly}
       min={min}
       max={max}
-      onKeyDown={onKeyDown}
+      onKeyDown={handleKeyDown}
       autoFocus={autoFocus}
       style={style}
       className={`${inputBase} ${readOnly ? readOnlyExtra : ""} ${className}`}
@@ -78,11 +85,12 @@ export function FIn({
 /**
  * Select
  */
-export function FSel({ value, onChange, options, placeholder, className = "" }) {
+export function FSel({ value, onChange, onBlur, options, placeholder, className = "" }) {
   return (
     <select
       value={value ?? ""}
       onChange={(e) => onChange?.(e.target.value)}
+      onBlur={onBlur}
       className={`${inputBase} cursor-pointer ${className}`}
     >
       <option value="">{placeholder || "— Pilih —"}</option>
@@ -98,11 +106,12 @@ export function FSel({ value, onChange, options, placeholder, className = "" }) 
 /**
  * Textarea
  */
-export function FTa({ value, onChange, rows = 2, placeholder }) {
+export function FTa({ value, onChange, onBlur, rows = 2, placeholder }) {
   return (
     <textarea
       value={value ?? ""}
       onChange={(e) => onChange?.(e.target.value)}
+      onBlur={onBlur}
       rows={rows}
       placeholder={placeholder}
       className={`${inputBase} resize-y`}
@@ -157,6 +166,7 @@ export function NumInput({
         const v = e.target.value;
         if (/^-?\d*\.?\d*$/.test(v) || v === "") setRaw(v);
       }}
+      onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
       className={`${inputBase} ${readOnly ? readOnlyExtra : ""} ${className}`}
     />
   );

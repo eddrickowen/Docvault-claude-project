@@ -14,8 +14,8 @@ import {
 import { INIT_PO_STATUS, ITEM_STATUS, PAGE_SIZE, mkItem, VENDOR_NAME, DEFAULT_EXCEL_ITEM_COLS, DEFAULT_EXCEL_PO_COLS } from "../lib/constants";
 
 /* ── Class constants ── */
-const thCls   = "py-[7px] px-2 text-[10px] font-bold text-text-secondary text-left whitespace-nowrap border-b border-border-default uppercase tracking-[.02em] bg-surface-alt cursor-pointer select-none";
-const tdCls   = "py-1.5 px-2 border-b border-border-default text-[11px] align-middle";
+const thCls   = "py-1 px-1.5 text-[10px] font-bold text-text-secondary text-left whitespace-nowrap border-b border-border-default uppercase tracking-[.02em] bg-surface-alt cursor-pointer select-none";
+const tdCls   = "py-0.5 px-1.5 border-b border-border-default text-[11px] align-middle";
 const stickyL = "sticky left-0 z-[1] shadow-[3px_0_6px_rgba(0,0,0,0.05)]";
 const stickyR = "sticky right-0 z-[1] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]";
 const doThCls = "py-[5px] px-[10px] text-[9px] font-bold text-text-secondary text-left border-b border-border-default uppercase";
@@ -444,11 +444,20 @@ export function POList() {
       if (el) {
         el.scrollIntoView({ block: "center", behavior: "smooth" });
         el.classList.add("row-hl");
-        setTimeout(() => el.classList.remove("row-hl"), 1800);
+        setTimeout(() => el.classList.remove("row-hl"), 2500);
       }
       setJumpTargetPO(null);
-    }, 200);
+    }, 400);
   }, [jumpTargetPOId, sortedFiltered, perPage, setPage, setJumpTargetPO]);
+
+  useEffect(() => {
+    const trigger = usePOStore.getState().triggerNewPO;
+    if (trigger) {
+      setEditPO(null);
+      setShowForm(true);
+      usePOStore.getState().setTriggerNewPO(false);
+    }
+  }, [pos, usePOStore.getState().triggerNewPO]); 
 
   const POProgress = ({ poId }) => {
     const { n, del, inv, paid } = getPOProgress(poId, items);
@@ -589,7 +598,7 @@ export function POList() {
   };
 
   const COLS = [
-    { col: "orderNo",  label: "No PO/Order",    ft: "text", fk: "orderNo" },
+    { col: "orderNo",  label: settings?.labelNoPO || "No PO/Order",    ft: "text", fk: "orderNo" },
     { col: "company",  label: "Perusahaan",      ft: "col" },
     { col: "orderDate",label: "Tgl Order",       ft: "date", fk: "orderDate" },
     { col: "status",   label: "Status",          ft: "col" },
@@ -613,7 +622,7 @@ export function POList() {
         labelPostfix="PO"
         primaryAction={
           <Btn id="btn-new-po" size="sm" variant="primary" onClick={() => { setEditPO(null); setShowForm(true); }}>
-            <Ico d={IC.plus} size={11} /> PO Baru
+            <Ico d={IC.plus} size={12} /> PO Baru
           </Btn>
         }
         bulkActions={
@@ -654,7 +663,15 @@ export function POList() {
           />
           <tbody>
             {!paged.length && (
-              <tr><td colSpan={10} className="py-10 text-center text-text-muted text-[13px]">Tidak ada PO.</td></tr>
+              <tr><td colSpan={10} className="py-16 text-center">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-soft border border-brand-mid flex items-center justify-center mb-1">
+                    <Ico d={IC.po} size={22} color="var(--color-brand)" />
+                  </div>
+                  <div className="text-sm font-bold text-text-secondary">Belum Ada PO</div>
+                  <div className="text-xs text-text-muted max-w-[240px]">Tekan <kbd className="px-1.5 py-0.5 bg-bg-app border border-border-strong rounded text-[10px] font-mono font-bold">N</kbd> untuk membuat PO baru</div>
+                </div>
+              </td></tr>
             )}
             {paged.map((po, i) => {
               const tots       = calcPOTotals(po, items);
@@ -727,7 +744,7 @@ export function POList() {
                     </td>
                     <td className={`${tdCls} font-mono font-bold whitespace-nowrap`}>{fmtShort(tots.total)}</td>
                     <td className={`${tdCls} text-[11px] text-text-secondary`}>{getPOZone(po.id, items)}</td>
-                    <td className={tdCls} onClick={(e) => e.stopPropagation()}>
+                    <td className={`${tdCls} w-[60px] text-right`} onClick={(e) => e.stopPropagation()}>
                       {agingDays >= 0
                         ? <span className="text-[11px] font-bold px-[7px] py-0.5 rounded-[5px] whitespace-nowrap" style={{ color: agingColor(agingDays), background: agingBg(agingDays) }}>{agingDays}h</span>
                         : <span className="text-[10px] text-text-muted">–</span>}

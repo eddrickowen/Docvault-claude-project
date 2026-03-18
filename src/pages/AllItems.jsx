@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { Btn, Ico, IC, Modal, SPill, FIn, FSel } from "../components/ui";
 import { Pagination, DateRangeFilter, NumberRangeFilter, TextFilter, ColFilter, InlineCell, CopyTSVButton, DataTableToolbar, DataTableHeader, ItemTableRow } from "../components/shared";
 import { ItemForm, BulkEditModal } from "../components/forms";
@@ -11,8 +11,8 @@ import {
 import { ITEM_STATUS, INIT_PO_STATUS, PAGE_SIZE, DEFAULT_EXCEL_ITEM_COLS } from "../lib/constants";
 
 /* ── Class constants ── */
-const thCls  = "py-[7px] px-2 text-[10px] font-bold text-text-secondary text-left whitespace-nowrap border-b border-border-default uppercase tracking-[.02em] bg-surface-alt cursor-pointer select-none";
-const tdCls  = "py-1.5 px-2 border-b border-border-default text-[11px] align-middle";
+const thCls  = "py-1 px-1.5 text-[10px] font-bold text-text-secondary text-left whitespace-nowrap border-b border-border-default uppercase tracking-[.02em] bg-surface-alt cursor-pointer select-none";
+const tdCls  = "py-0.5 px-1.5 border-b border-border-default text-[11px] align-middle";
 const stickyL = "sticky left-0 z-[1] shadow-[3px_0_6px_rgba(0,0,0,0.05)]";
 const stickyR = "sticky right-0 z-[1] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]";
 
@@ -39,6 +39,11 @@ export function AllItems({ onJump }) {
   const [isGrouped,   setIsGrouped]   = useState(true);
   const [expGrp,      setExpGrp]      = useState(new Set());
   const { ask, ConfirmModal }   = useConfirm();
+
+  // Auto-ungroup if filters are active
+  useEffect(() => {
+    if (hasFilters) setIsGrouped(false);
+  }, [hasFilters]);
 
   const filtered = useMemo(() => {
     let r = items.filter((i) => {
@@ -211,8 +216,17 @@ export function AllItems({ onJump }) {
   };
 
   const COLS = [
-    { col: "itemName",    label: "Item",              ft: "text", fk: "itemName"     },
+    { col: "itemName",    label: settings?.labelItemName || "Item",  ft: "text", fk: "itemName"     },
     { col: "qty",         label: "Qty",               ft: "num",  fk: "qty"          },
+    { 
+      col: "buyPriceEach", 
+      label: "Harga Beli (each)", 
+      ft: null,
+      labelFn: (i) => {
+        const main = (i.supplierAssignments || []).find(a => a.role === "main");
+        return main ? fmt(main.pricePerUnit) : "–";
+      }
+    },
     { col: "unitPrice",   label: "Harga Jual",        ft: null                       },
     { col: "net",         label: "Net",               ft: "num",  fk: "net"          },
     {
@@ -309,7 +323,15 @@ export function AllItems({ onJump }) {
             getRowIds={(row) => row.isGroupRow ? row.items.map((it) => it.id) : [row.id]}
           />
           <tbody>
-            {!paged.length && <tr><td colSpan={15} className="py-10 text-center text-text-muted">Tidak ada item.</td></tr>}
+            {!paged.length && <tr><td colSpan={15} className="py-16 text-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-12 h-12 rounded-2xl bg-purple-soft border border-[#c4b5fd] flex items-center justify-center mb-1">
+                  <Ico d={IC.box} size={22} color="var(--color-purple)" />
+                </div>
+                <div className="text-sm font-bold text-text-secondary">Tidak Ada Item</div>
+                <div className="text-xs text-text-muted">Coba ubah filter atau kata kunci pencarian</div>
+              </div>
+            </td></tr>}
             {paged.map((rowItem, idx) => {
               /* ── renderItemRow defined first so group rows can call it ── */
               const renderItemRow = (item, subIdx, isSub = false) => {

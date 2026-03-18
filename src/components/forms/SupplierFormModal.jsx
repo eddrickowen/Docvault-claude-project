@@ -9,7 +9,7 @@ import { uid } from "../../lib/helpers";
 export function SupplierFormModal({ initial, onSave, onClose }) {
   const blank = {
     id: "", name: "", contact: "", phone: "", email: "",
-    address: "", tags: [], notes: "", createdAt: today(),
+    address: "", city: "", country: "", tags: [], notes: "", createdAt: today(),
   };
   const [f, setF] = useState(initial || blank);
   const [ti, setTi] = useState("");
@@ -40,7 +40,13 @@ export function SupplierFormModal({ initial, onSave, onClose }) {
           <FIn value={f.email} onChange={set("email")} placeholder="email@supplier.com" />
         </FF>
         <FF label="Alamat">
-          <FIn value={f.address} onChange={set("address")} placeholder="Jl. Industri No.1" />
+          <FTa value={f.address} onChange={set("address")} rows={1} placeholder="Jl. Industri No.1" />
+        </FF>
+        <FF label="Kota & Negara">
+          <div className="flex gap-2">
+            <FIn value={f.city} onChange={set("city")} placeholder="Kota" />
+            <FIn value={f.country} onChange={set("country")} placeholder="Negara" />
+          </div>
         </FF>
         <FF label="Catatan" span={2}>
           <FTa value={f.notes} onChange={set("notes")} rows={2} />

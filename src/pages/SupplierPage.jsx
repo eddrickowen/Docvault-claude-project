@@ -7,13 +7,13 @@ import { itemNet, itemMargin, fmt, fmtShort } from "../lib/helpers";
 import { ITEM_STATUS } from "../lib/constants";
 
 /* ── Class constants ── */
-const thCls = "py-[5px] px-[10px] text-[9px] font-bold text-text-secondary text-left whitespace-nowrap border-b border-border-default uppercase tracking-[.04em] bg-surface-alt";
-const tdCls = "py-[6px] px-[10px] text-[11px]";
+const thCls = "py-1 px-1.5 text-[10px] font-bold text-text-secondary text-left whitespace-nowrap border-b border-border-default uppercase tracking-[.04em] bg-surface-alt";
+const tdCls = "py-0.5 px-1.5 border-b border-border-default text-[11px] align-middle";
 const tabBtnActive = "py-[5px] px-3.5 rounded-[5px] border-none font-semibold text-[11px] cursor-pointer capitalize bg-surface text-text-primary shadow-sm";
 const tabBtnIdle   = "py-[5px] px-3.5 rounded-[5px] border-none font-semibold text-[11px] cursor-pointer capitalize bg-transparent text-text-muted";
 
 export function SupplierPage({ onJump }) {
-  const { suppliers, items, pos, addSupplier, updateSupplier, archiveSupplier, toast } = usePOStore();
+  const { suppliers, items, pos, addSupplier, updateSupplier, archiveSupplier, deleteSupplier, toast } = usePOStore();
 
   const [tab,      setTab]      = useState("aktif");
   const [search,   setSearch]   = useState("");
@@ -27,7 +27,11 @@ export function SupplierPage({ onJump }) {
 
   const list = suppliers.filter((s) =>
     (tab === "aktif" ? !s.deletedAt : s.deletedAt) &&
-    (!search || s.name.toLowerCase().includes(search.toLowerCase()) || s.tags?.some((t) => t.includes(search.toLowerCase()))) &&
+    (!search || 
+      s.name.toLowerCase().includes(search.toLowerCase()) || 
+      s.city?.toLowerCase().includes(search.toLowerCase()) ||
+      s.country?.toLowerCase().includes(search.toLowerCase()) ||
+      s.tags?.some((t) => t.includes(search.toLowerCase()))) &&
     (!tagFilter || s.tags?.includes(tagFilter))
   );
   const allTags = [...new Set(suppliers.flatMap((s) => s.tags || []))].sort();
@@ -107,7 +111,13 @@ export function SupplierPage({ onJump }) {
                       <div className="font-bold text-[13px] text-text-primary truncate max-w-[220px]">{s.name}</div>
                       <Ico d={isExp ? IC.chevD : IC.chevR} size={13} color="var(--color-text-muted)" />
                     </div>
-                    {s.contact && <div className="text-[10px] text-text-secondary mt-0.5">{s.contact}</div>}
+                    {s.contact && <div className="text-[10px] text-text-secondary mt-0.5 font-medium">{s.contact}</div>}
+                    {(s.city || s.country) && (
+                      <div className="text-[10px] text-text-muted mt-0.5 flex items-center gap-1.5">
+                        <Ico d={IC.truck} size={10} color="var(--color-text-muted)" />
+                        {s.city}{s.city && s.country ? ", " : ""}{s.country}
+                      </div>
+                    )}
                     {s.tags?.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {s.tags.map((t) => <TagChip key={t} label={t} />)}
@@ -279,6 +289,11 @@ export function SupplierPage({ onJump }) {
                       {tab === "aktif"
                         ? <Btn size="sm" variant="amber" onClick={() => { archiveSupplier(s.id); toast(`✓ ${s.name} diarsipkan`); }}><Ico d={IC.archive} size={10} /> Arsipkan</Btn>
                         : <Btn size="sm" variant="success" onClick={() => { updateSupplier({ ...s, deletedAt: null }); toast(`✓ ${s.name} dipulihkan`); }}><Ico d={IC.restore} size={10} /> Pulihkan</Btn>}
+                      {sitems.length === 0 && (
+                        <Btn size="sm" variant="danger" onClick={() => ask(`Hapus supplier "${s.name}" secara permanen?`, () => { deleteSupplier(s.id); toast(`✓ ${s.name} dihapus`); }, { danger: true, confirmLabel: "Hapus Permanen" })}>
+                          <Ico d={IC.trash} size={10} /> Hapus
+                        </Btn>
+                      )}
                     </div>
                   </div>
                 )}

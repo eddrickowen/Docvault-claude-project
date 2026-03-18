@@ -19,11 +19,11 @@ export function useDataTable(initialSortCol = "", initialSortDir = "asc", defaul
   }, [colF, dateF, numF, textF, perPage]);
 
   const toggleSort = (col) => {
-    setSort((s) => 
-      s.col === col 
-        ? { col, dir: s.dir === "asc" ? "desc" : "asc" } 
-        : { col, dir: "asc" }
-    );
+    setSort((s) => {
+      if (s.col !== col) return { col, dir: "asc" };
+      if (s.dir === "asc") return { col, dir: "desc" };
+      return { col: "", dir: "" }; // Cycle back to normal
+    });
     setPage(1);
   };
 
