@@ -19,6 +19,12 @@ const stickyR = "sticky right-0 z-[1] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]";
 export function AllItems({ onJump }) {
   const { items, pos, suppliers, dos, zoneTypes, settings, hsDB, updateItem, deleteItem, addSupplier, toast } = usePOStore();
 
+  useEffect(() => {
+    const handleEsc = (e) => { if (e.key === "Escape") setBulkSel(new Set()); };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, []);
+
   const poById = useMemo(() => {
     const map = {};
     (pos || []).forEach((p) => {
@@ -218,9 +224,14 @@ export function AllItems({ onJump }) {
   const COLS = [
     { col: "itemName",    label: settings?.labelItemName || "Item",  ft: "text", fk: "itemName"     },
     { col: "qty",         label: "Qty",               ft: "num",  fk: "qty"          },
+    { col: "delivered",   label: "Del.",              ft: null,   labelFn: (i) => {
+        const d = getQtyDel(i.id, dos);
+        return <span className={`font-bold ${d >= i.qty ? "text-green" : "text-amber"}`}>{d}</span>;
+      }
+    },
     { 
       col: "buyPriceEach", 
-      label: "Harga Beli (each)", 
+      label: "Harga Beli", 
       ft: null,
       labelFn: (i) => {
         const main = (i.supplierAssignments || []).find(a => a.role === "main");
@@ -248,6 +259,7 @@ export function AllItems({ onJump }) {
     { col: "deliveryDate",label: "Delivery",          ft: "date", fk: "deliveryDate" },
     { col: "invoiceNo",   label: "Invoice",           ft: "text", fk: "invoiceNo"    },
     { col: "zoneType",    label: "Zone",              ft: "col"                      },
+    { col: "notes",       label: "Note",              ft: "text", fk: "notes"        },
     {
       col: "poNo",
       label: "No PO",
@@ -354,6 +366,7 @@ export function AllItems({ onJump }) {
                     zoneTypes={zoneTypes}
                     stickyL={stickyL}
                     stickyR={stickyR}
+                    showBuyPrice={true}
                   />
                 );
               };
@@ -386,9 +399,10 @@ export function AllItems({ onJump }) {
                           <span className="text-[10px] font-normal text-text-muted bg-white border border-border-strong px-1.5 py-0.5 rounded ml-1">{g.items.length} PO</span>
                         </div>
                       </td>
-                      <td className={`${tdCls} font-mono font-bold`}>{g.qty}</td>
+                      <td className={`${tdCls} font-mono font-bold text-center`}>{g.qty}</td>
+                      <td className={tdCls} colSpan={3}><span className="text-[10px] text-text-muted italic">Terbagi di {g.poIds.size} PO...</span></td>
                       <td className={`${tdCls} font-mono font-bold text-brand`}>{fmt(g.net)}</td>
-                      <td className={tdCls} colSpan={7}><span className="text-[10px] text-text-muted italic">Bervariasi</span></td>
+                      <td className={tdCls} colSpan={6} />
                       <td className={`${tdCls} font-mono font-bold whitespace-nowrap ${Number(g.margin) >= 0 ? "text-green" : "text-red"}`}>{fmtShort(g.margin)}</td>
                       <td className={`${tdCls} ${stickyR} ${grpBg}`} />
                     </tr>

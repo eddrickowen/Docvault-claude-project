@@ -85,7 +85,7 @@ export const parseSmartDate = (raw) => {
   const parts = s.split(/[.\-\/]/);
   if (parts.length === 3) {
     let [d, m, y] = parts.map(Number);
-    if (y < 100) y += y < 50 ? 2000 : 1900;
+    if (y < 100) y += y < 30 ? 2000 : 1900;
     if (d > 0 && m > 0 && m <= 12 && y > 1900)
       return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   }
@@ -178,7 +178,10 @@ export const fmtShort = (n) => {
 export const fmtDate = (d) => {
   if (!d) return "–";
   try { return new Date(d + "T00:00:00").toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }); }
-  catch { return d; }
+  catch { 
+    if (typeof d === 'string' && d.includes("-")) return d.split("-").reverse().join("/");
+    return d; 
+  }
 };
 
 export const fmtPct = (v, t) => (t && t !== 0 ? `${((v / t) * 100).toFixed(1)}%` : "–");
@@ -198,13 +201,16 @@ export const getPOZone = (poId, items) => {
 };
 
 export const calcPOTotals = (po, items) => {
+  const st = usePOStore.getState().settings || {};
+  const rate = typeof st.ppnRate !== 'undefined' ? Number(st.ppnRate) : PPN_RATE;
+
   if (po.totalLocked) {
     const ex = Number(po.manualExPPN) || 0;
-    const ppn = Number(po.manualPPN) || Math.round(ex * PPN_RATE);
+    const ppn = Number(po.manualPPN) || Math.round(ex * rate);
     return { exPPN: ex, ppn, total: ex + ppn };
   }
   const ex = items.filter((i) => i.poId === po.id).reduce((s, i) => s + itemNet(i), 0);
-  return { exPPN: ex, ppn: Math.round(ex * PPN_RATE), total: Math.round(ex * (1 + PPN_RATE)) };
+  return { exPPN: ex, ppn: Math.round(ex * rate), total: Math.round(ex * (1 + rate)) };
 };
 
 export const getPOProgress = (poId, items) => {
@@ -258,14 +264,7 @@ export const exportCSV = (headers, rows, fname) => {
 
 export const copyTSV = (headers, rows, done) => {
   const t = [headers, ...rows].map((r) => r.map((v) => String(v ?? "").replace(/\r?\n|\r/g, " ").replace(/\t/g, " ")).join("\t")).join("\n");
-  navigator.clipboard.writeText(t).then(done).catch(() => {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
-      document.body.appendChild(ta); ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      done?.();
-    } catch { /* silent */ }
+  navigator.clipboard.writeText(t).then(done).catch((err) => {
+    console.error("Clipboard copy failed:", err);
   });
 };

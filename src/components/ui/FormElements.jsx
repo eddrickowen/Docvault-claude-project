@@ -130,6 +130,7 @@ export function NumInput({
   readOnly,
   className = "",
   placeholder,
+  onKeyDown,
 }) {
   const [raw, setRaw] = useState("");
   const [focused, setFocused] = useState(false);
@@ -138,6 +139,11 @@ export function NumInput({
     : value === 0 || value === "" || value == null
       ? ""
       : String(value);
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") e.target.blur();
+    onKeyDown?.(e);
+  };
 
   return (
     <input
@@ -166,9 +172,83 @@ export function NumInput({
         const v = e.target.value;
         if (/^-?\d*\.?\d*$/.test(v) || v === "") setRaw(v);
       }}
-      onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+      onKeyDown={handleKeyDown}
       className={`${inputBase} ${readOnly ? readOnlyExtra : ""} ${className}`}
     />
+  );
+}
+
+/**
+ * SearchInput — searchable input with dropdown suggestions.
+ */
+export function SearchInput({ value, onChange, options, placeholder, className = "", onKeyDown }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [idx, setIdx] = useState(0);
+
+  const filtered = options.filter(o => 
+    (o.l || o).toLowerCase().includes(search.toLowerCase())
+  ).slice(0, 8);
+
+  const select = (o) => {
+    onChange?.(o.v ?? o);
+    setSearch("");
+    setOpen(false);
+    setIdx(0);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setIdx(p => (p + 1) % Math.max(1, filtered.length));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setIdx(p => (p - 1 + filtered.length) % Math.max(1, filtered.length));
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      if (open && filtered[idx]) {
+        e.preventDefault();
+        select(filtered[idx]);
+      }
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+    onKeyDown?.(e);
+  };
+
+  return (
+    <div className="relative w-full">
+      <input
+        type="text"
+        value={open ? search : (value || "")}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          if (!open) setOpen(true);
+          setIdx(0);
+        }}
+        onFocus={() => {
+          setSearch("");
+          setOpen(true);
+        }}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className={`${inputBase} ${className}`}
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-[1000] top-full left-0 right-0 mt-1 bg-surface border border-border-strong rounded-lg shadow-xl overflow-hidden py-1">
+          {filtered.map((o, i) => (
+            <div
+              key={o.v ?? o}
+              onMouseDown={() => select(o)}
+              onMouseEnter={() => setIdx(i)}
+              className={`px-3 py-2 text-xs cursor-pointer ${i === idx ? "bg-brand text-white" : "text-text-primary hover:bg-surface-alt"}`}
+            >
+              {o.l ?? o}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

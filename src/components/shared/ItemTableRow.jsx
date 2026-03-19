@@ -24,6 +24,7 @@ export function ItemTableRow({
   stickyL = "",
   stickyR = "",
   tdCls = "py-1.5 px-2 border-b border-border-default text-[11px] align-middle",
+  showBuyPrice = false,
 }) {
   const mg = itemMargin(item);
   const net = itemNet(item);
@@ -64,9 +65,21 @@ export function ItemTableRow({
         <div className="flex items-center gap-1">
           <span>{item.qty}</span>
           <span className="text-text-secondary text-[10px]">{item.unit}</span>
-          {qDel > 0 && <span className={`text-[9px] font-bold ${qDelCls}`}>({qDel}↑)</span>}
         </div>
       </td>
+
+      {/* Delivered Qty */}
+      <td className={`${tdCls} font-mono`}>
+        <span className={`font-bold ${qDelCls}`}>{qDel}</span>
+        <span className="text-text-muted text-[10px]"> / {item.qty}</span>
+      </td>
+
+      {/* Buy Price (Conditional) */}
+      {showBuyPrice && (
+        <td className={`${tdCls} font-mono text-text-muted italic`}>
+          {main?.pricePerUnit ? fmt(main.pricePerUnit) : "–"}
+        </td>
+      )}
 
       {/* Price Unit */}
       <td className={`${tdCls} font-mono whitespace-nowrap`}>{fmt(item.unitPrice)}</td>
@@ -113,6 +126,17 @@ export function ItemTableRow({
           opts={(zoneTypes || []).map(z => ({ v: typeof z === "object" ? z.name : z, l: typeof z === "object" ? z.name : z }))}
           placeholder="Pilih Zona..."
         />
+      </td>
+
+      {/* Note */}
+      <td className={tdCls} title={item.notes || ""}>
+        <div className="max-w-[140px] whitespace-normal break-words line-clamp-2">
+          <InlineCell 
+            value={item.notes || ""} 
+            onSave={(v) => onUpdate({ ...item, notes: v })} 
+            placeholder="Catatan..." 
+          />
+        </div>
       </td>
 
       {/* PO Number (Optional, for AllItems) */}

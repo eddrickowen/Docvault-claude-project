@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { Accordion, Btn, Ico, IC, FGrid, FF, FIn, FTa, FSel, NumInput } from "../ui";
+import { useState, useEffect, useCallback } from "react";
+import { Accordion, Btn, Ico, IC, FGrid, FF, FIn, FTa, FSel, NumInput, Divider } from "../ui";
 import { SmartDate } from "../shared";
 import { HSCodeInput } from "../shared";
 import { SupplierAssignments } from "./SupplierAssignments";
@@ -59,16 +59,26 @@ export function ItemForm({ initial, poId, zoneTypes, suppliers, dos, hsDB = [], 
   const delWarn = needsDelivery && !f.deliveryDate;
   const canSave = f.itemName.trim() && !delWarn;
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.key === "Enter") {
+        if (canSave) {
+          e.preventDefault();
+          onSave({ ...f, id: f.id || ("item" + uid()), poId });
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [f, canSave, poId, onSave]);
+
   return (
     <div>
       {/* Detail Item */}
       <Accordion title="Detail Item" icon={IC.box} defaultOpen warning={!f.itemName.trim()}>
         <FGrid cols={2}>
           <FF label="Nama Item" span={2} required>
-            <FIn value={f.itemName} onChange={set("itemName")} placeholder="Nama item / part number" />
-          </FF>
-          <FF label="Deskripsi" span={2}>
-            <FTa value={f.desc} onChange={set("desc")} rows={2} placeholder="Keterangan..." />
+            <FIn value={f.itemName} onChange={set("itemName")} placeholder="Nama item / part number" autoFocus />
           </FF>
           <FF label="Qty">
             <NumInput value={f.qty} onChange={set("qty")} min={0} />
@@ -76,35 +86,47 @@ export function ItemForm({ initial, poId, zoneTypes, suppliers, dos, hsDB = [], 
           <FF label="Unit">
             <FSel value={f.unit} onChange={set("unit")} options={UOM_OPTIONS} />
           </FF>
-          <FF label="HS Code">
-            <HSCodeInput value={f.hsCode || ""} onChange={set("hsCode")} hsDB={hsDB} />
+          <FF label="Harga Jual /Unit (Rp)">
+            <NumInput 
+              value={f.unitPrice} 
+              onChange={set("unitPrice")} 
+              min={0} 
+              onKeyDown={(e) => e.key === "Enter" && canSave && onSave({ ...f, id: f.id || ("item" + uid()), poId })} 
+            />
           </FF>
           <FF label="Zone Type">
             <FSel value={f.zoneType} onChange={set("zoneType")} options={zoneTypes.map((z) => ({ v: z, l: z }))} />
           </FF>
+          <Divider label="Info Tambahan (Optional)" />
+          <FF label="Deskripsi" span={2}>
+            <FTa value={f.desc} onChange={set("desc")} rows={2} placeholder="Keterangan..." />
+          </FF>
+          <FF label="HS Code">
+            <HSCodeInput value={f.hsCode || ""} onChange={set("hsCode")} hsDB={hsDB} />
+          </FF>
+          <FF label="Net Total (Rp)" hint="override">
+            <NumInput value={net} onChange={set("netTarget")} min={0} />
+          </FF>
+          <FF label="Keterangan / Notes" span={2}>
+            <FTa value={f.notes} onChange={set("notes")} rows={2} placeholder="Catatan internal..." />
+          </FF>
         </FGrid>
       </Accordion>
 
-      {/* Harga & Diskon */}
-      <Accordion title="Harga & Diskon" icon={IC.stats} defaultOpen>
+      {/* Harga & Diskon (Disederhanakan karena input utama sudah di atas) */}
+      <Accordion title="Diskon & Margin" icon={IC.stats}>
         <FGrid cols={2}>
-          <FF label="Harga Jual /Unit (Rp)">
-            <NumInput value={f.unitPrice} onChange={set("unitPrice")} min={0} />
-          </FF>
-          <FF label="Net Total (Rp)" hint="ubah ini → adjust unitPrice jika perlu">
-            <NumInput value={net} onChange={set("netTarget")} min={0} />
-          </FF>
           <FF label="Discount (Rp)">
             <NumInput value={f.discount || 0} onChange={set("discount")} min={0} />
           </FF>
-          <FF label="Discount (%)" hint="⇄ Rp">
+          <FF label="Discount (%)">
             <NumInput value={f.discountPct || 0} onChange={set("discountPct")} min={0} max={100} />
           </FF>
-          <FF label="Gross (sebelum disc)">
+          <FF label="Gross">
             <FIn value={fmt(gross)} readOnly style={{ color: "var(--color-text-muted)" }} />
           </FF>
           <FF label="Net Ex PPN">
-            <FIn value={fmt(net)} readOnly style={{ fontWeight: 700, color: "var(--color-brand)", fontSize: 13 }} />
+            <FIn value={fmt(net)} readOnly style={{ fontWeight: 700, color: "var(--color-brand)" }} />
           </FF>
           {buyPU > 0 && (
             <>

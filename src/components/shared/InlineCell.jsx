@@ -60,7 +60,7 @@ export function InlineCell({ value, onSave, type = "text", mono, width, placehol
           style={{ top: pos.top, left: pos.left, minWidth: isDate ? 180 : 190 }}
         >
           {isDate ? (
-            <SmartDate value={value || ""} onChange={(val) => { onSave(val); setEditing(false); }} />
+            <SmartDate value={value || ""} onChange={(val) => { onSave(val); setEditing(false); }} onCancel={cancel} />
           ) : select ? (
             <select
               autoFocus

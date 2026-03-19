@@ -83,6 +83,7 @@ export const INIT_SETTINGS = {
   currencySymbol: "Rp.",
   thousandSeparator: ".",
   decimalSeparator: ",",
+  ppnRate: 0.11,
 };
 
 /* ── Initial Data ── */
@@ -140,7 +141,7 @@ export const ITEM_STATUS = {
 };
 
 export const STATUS_RANK = {
-  draft: 0, pending: 1, confirmed: 2, revision: 1, on_hold: 1,
+  draft: 0, pending: 1, confirmed: 2, revision: 1.5, on_hold: 1.5,
   partial_del: 3, delivered: 4, invoiced: 5, partial_pay: 6, paid: 7, cancelled: 0,
 };
 
@@ -161,7 +162,8 @@ export const CSV_IT_ST = {
 export const mkItem = (o = {}) => ({
   id: "", poId: "", itemName: "", desc: "", qty: 1, unit: "pcs", unitPrice: 0,
   discount: 0, discountPct: 0, supplierAssignments: [], status: "pending",
-  deliveryDate: "", doNos: [], invoiceNo: "", zoneType: "", hsCode: "", ...o,
+  deliveryDate: "", doNos: [], invoiceNo: "", zoneType: "", hsCode: "",
+  notes: "", ...o,
 });
 
 export const mkAsgn = (o = {}) => ({

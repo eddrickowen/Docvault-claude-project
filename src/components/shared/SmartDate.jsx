@@ -9,26 +9,53 @@ const inputCls =
  * SmartDate — hybrid text input + native date picker
  * Accepts DD/MM/YY, DD.MM.YYYY, YYYY-MM-DD etc.
  */
-export function SmartDate({ value, onChange, placeholder, className }) {
+export function SmartDate({ value, onChange, onCancel, placeholder, className }) {
   const [raw, setRaw] = useState("");
   const [focused, setFocused] = useState(false);
   const pickerRef = useRef();
 
   const display = focused ? raw : value ? fmtDate(value) : "";
 
+  const commitRaw = () => {
+    const parsed = parseSmartDate(raw);
+    if (parsed) {
+      onChange(parsed);
+      setRaw(fmtDate(parsed));
+    } else {
+      setRaw(value ? fmtDate(value) : "");
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Escape") {
+      setFocused(false);
+      setRaw(value ? fmtDate(value) : "");
+      onCancel?.();
+    }
+    if (e.key === "Enter") {
+      commitRaw();
+      setFocused(false);
+    }
+  };
+
   return (
     <div className="relative flex items-center gap-0">
       <input
         value={display}
-        readOnly
-        onClick={() => pickerRef.current?.showPicker?.() || pickerRef.current?.click()}
+        onChange={(e) => setRaw(e.target.value)}
         onFocus={() => {
           setFocused(true);
-          pickerRef.current?.showPicker?.() || pickerRef.current?.click();
+          setRaw(value ? fmtDate(value) : "");
         }}
-        onBlur={() => setFocused(false)}
+        onBlur={() => {
+          setTimeout(() => {
+            commitRaw();
+            setFocused(false);
+          }, 200);
+        }}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder || "Pilih tanggal..."}
-        className={`${inputCls} pr-[30px] cursor-pointer ${className || ""}`}
+        className={`${inputCls} pr-[30px] cursor-text ${className || ""}`}
       />
       <button
         type="button"

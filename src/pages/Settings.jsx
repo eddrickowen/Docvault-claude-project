@@ -193,6 +193,9 @@ export function Settings() {
                       <FSel value={s.decimalSeparator || ","} onChange={(v) => setS((p) => ({ ...p, decimalSeparator: v }))} options={[ {v: ",", l: 'Koma ( , )'}, {v: ".", l: 'Titik ( . )'} ]} className="font-mono text-sm" />
                     </FF>
                   </div>
+                  <FF label="Tarif PPN (Tax Rate)" hint="Contoh: 0.11 = 11%">
+                    <NumInput value={s.ppnRate ?? 0.11} onChange={(v) => setS((p) => ({ ...p, ppnRate: v }))} min={0} max={1} />
+                  </FF>
                   <div className="col-span-2 mt-4">
                     <div className="text-[13px] font-bold text-text-primary mb-2">Pencarian Global di Halaman All Items</div>
                     <div className="grid grid-cols-2 gap-3">
@@ -291,7 +294,7 @@ export function Settings() {
                   <div className="mb-2">
                     <FIn value={uomSearch} onChange={setUomSearch} placeholder="Cari UOM..." className="!py-1 !px-2 !text-xs" />
                   </div>
-                  {(usePOStore.getState().uom || []).filter(u => u.l.toLowerCase().includes(uomSearch.toLowerCase())).map((u, i) => (
+                  {(uom || []).filter(u => u.l.toLowerCase().includes(uomSearch.toLowerCase())).map((u, i) => (
                     <div key={i} className={listRowCls}>
                       <span className="flex-1 text-[13px] font-semibold text-text-primary">{u.l} ({u.v})</span>
                       <Btn size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 hover:text-red transition-opacity" onClick={() => { 

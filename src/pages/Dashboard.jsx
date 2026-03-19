@@ -123,8 +123,12 @@ export function Dashboard({ onJump }) {
   const urgentPOs     = fPos.filter((p) => p.priority === "urgent" && !["paid", "cancelled"].includes(p.status));
   const incompletePOs = fPos.filter((p) => isIncompletePO(p));
   
-  const totalRev      = fPos.reduce((s, p) => s + calcPOTotals(p, items).total, 0);
-  const totalExPPN    = fPos.reduce((s, p) => s + calcPOTotals(p, items).exPPN, 0);
+  const { totalRev, totalExPPN } = fPos.reduce((acc, p) => {
+    const { total, exPPN } = calcPOTotals(p, items);
+    acc.totalRev += total;
+    acc.totalExPPN += exPPN;
+    return acc;
+  }, { totalRev: 0, totalExPPN: 0 });
   const totalMargin   = fItems.reduce((s, i) => { const m = itemMargin(i); return m !== null ? s + m : s; }, 0);
   
   const notDeliveredPOs = fPos.filter(p => !["delivered", "invoiced", "paid", "cancelled"].includes(p.status));
@@ -474,6 +478,11 @@ export function Dashboard({ onJump }) {
                 </span>
               </div>
             ))}
+            {overduePOs.length > 5 && (
+              <button onClick={() => onJump("po")} className="w-full py-2 text-[10px] font-bold text-amber hover:bg-amber/10 rounded-lg border border-dashed border-amber/30 transition-all">
+                + {overduePOs.length - 5} lainnya (Lihat Semua)
+              </button>
+            )}
             {overduePOs.length === 0 && <div className="text-center py-4 text-text-muted text-xs italic">Tidak ada PO yang overdue pada periode ini</div>}
           </div>
         </div>
@@ -498,6 +507,11 @@ export function Dashboard({ onJump }) {
                   </div>
                 </div>
               ))}
+              {urgentPOs.length > 5 && (
+                <button onClick={() => onJump("po")} className="w-full py-2 text-[10px] font-bold text-red hover:bg-red/10 rounded-lg border border-dashed border-red/30 transition-all">
+                  + {urgentPOs.length - 5} lainnya (Lihat Semua)
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -525,6 +539,11 @@ export function Dashboard({ onJump }) {
                   </div>
                 );
               })}
+              {incompletePOs.length > 5 && (
+                <button onClick={() => onJump("po")} className="w-full py-2 text-[10px] font-bold text-orange-dark hover:bg-orange-dark/10 rounded-lg border border-dashed border-orange-dark/30 transition-all">
+                  + {incompletePOs.length - 5} lainnya (Lihat Semua)
+                </button>
+              )}
             </div>
           </div>
         )}

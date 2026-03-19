@@ -246,10 +246,20 @@ function ExpandedRow({ po, items, suppliers, dos, zoneTypes, settings, hsDB = []
                     }}
                   />
                 </th>
-                {["Item", "Qty", "Harga Jual", "Net", "Supplier Utama", "Margin", "Status", "Delivery", "Invoice", "Zone", "DO"].map((h) => (
-                  <th key={h} className={thCls}>{h}</th>
-                ))}
-                <th className={`${thCls} w-[60px] ${stickyR} bg-surface-alt z-[2]`} />
+                <th className={thCls}>Item</th>
+                <th className={thCls}>Qty/Unit</th>
+                <th className={thCls}>Delivered</th>
+                <th className={thCls}>Harga Jual</th>
+                <th className={thCls}>Net</th>
+                <th className={thCls}>Supplier Utama</th>
+                <th className={thCls}>Margin</th>
+                <th className={thCls}>Status</th>
+                <th className={thCls}>Delivery</th>
+                <th className={thCls}>Invoice</th>
+                <th className={thCls}>Zone</th>
+                <th className={thCls}>Note</th>
+                <th className={thCls}>DO</th>
+                <th className={`${thCls} w-24 text-center ${stickyR} bg-surface-alt z-[2]`} />
               </tr>
             </thead>
             <tbody>
@@ -450,14 +460,16 @@ export function POList() {
     }, 400);
   }, [jumpTargetPOId, sortedFiltered, perPage, setPage, setJumpTargetPO]);
 
+  const triggerNewPO = usePOStore(s => s.triggerNewPO);
+  const setTriggerNewPO = usePOStore(s => s.setTriggerNewPO);
+
   useEffect(() => {
-    const trigger = usePOStore.getState().triggerNewPO;
-    if (trigger) {
+    if (triggerNewPO) {
       setEditPO(null);
       setShowForm(true);
-      usePOStore.getState().setTriggerNewPO(false);
+      setTriggerNewPO(false);
     }
-  }, [pos, usePOStore.getState().triggerNewPO]); 
+  }, [pos, triggerNewPO, setTriggerNewPO]); 
 
   const POProgress = ({ poId }) => {
     const { n, del, inv, paid } = getPOProgress(poId, items);
@@ -606,8 +618,15 @@ export function POList() {
     { col: "items",    label: "Items/Progress",  ft: "col" },
     { col: "total",    label: "Total",           ft: "num",  fk: "total" },
     { col: "zone",     label: "Zone",            ft: "col",  keyFn: (p) => getPOZone(p.id, items), labelFn: (p) => getPOZone(p.id, items) },
+    { col: "notes",    label: "Note",            ft: "text", fk: "notes" },
     { col: "aging",    label: "Aging",           ft: null,   noSort: true },
   ];
+
+  useEffect(() => {
+    const handleEsc = (e) => { if (e.key === "Escape") setBulkSel(new Set()); };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, []);
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -761,8 +780,8 @@ export function POList() {
                           onClick={(e) => {
                             e.stopPropagation();
                             const nid   = uid();
-                            const nPO   = { ...po, id: nid, orderNo: "Order", orderDate: today(), status: "draft", createdAt: today() };
-                            const nItms = items.filter((i) => i.poId === po.id).map((i) => ({ ...i, id: uid(), poId: nid, status: "ordered", doNos: [], deliveryDate: "", invoiceNo: "" }));
+                            const nPO   = { ...po, id: nid, orderNo: `COPY-${po.orderNo}`, orderDate: today(), status: "draft", createdAt: today() };
+                            const nItms = items.filter((i) => i.poId === po.id).map((i) => ({ ...i, id: nid, poId: nid, status: "ordered", doNos: [], deliveryDate: "", invoiceNo: "" }));
                             addPO(nPO, nItms);
                             toast("✓ PO diduplikat");
                           }}

@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Modal, Btn, Ico, IC, FGrid, FF, FIn, FTa, FSel, NumInput, Divider, SBadge } from "../ui";
+import { useState, useEffect, useMemo } from "react";
+import { Modal, Btn, Ico, IC, FGrid, FF, FIn, FTa, FSel, NumInput, Divider, SBadge, SearchInput } from "../ui";
 import { SmartDate } from "../shared";
 import { ItemForm } from "./ItemForm";
 import { uid, today, fmt, itemNet, itemBuy } from "../../lib/helpers";
@@ -11,7 +11,7 @@ import { INIT_PO_STATUS, ITEM_STATUS, mkItem } from "../../lib/constants";
 export function POForm({ initial, companies, items, suppliers, dos, zoneTypes, settings, hsDB = [], onSave, onClose, onAddSupplier }) {
   const blank = {
     id: "", quoteRef: "", orderNo: "", company: "", orderDate: today(),
-    prNo: "", notes: "", folder: "", status: "draft", priority: "normal",
+    prNo: "", notes: "", folder: "", status: "confirmed", priority: "normal",
     totalLocked: false, manualExPPN: 0, manualPPN: 0,
   };
   const [f, setF] = useState(initial || blank);
@@ -42,6 +42,17 @@ export function POForm({ initial, companies, items, suppliers, dos, zoneTypes, s
     onSave({ ...f, id: newId }, finalItems);
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.key === "Enter") {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [f, draftItems]);
+
   return (
     <Modal open onClose={onClose} title={initial?.id ? `Edit PO – ${initial.orderNo}` : "Tambah PO Baru"} xwide>
       <FGrid cols={2}>
@@ -53,7 +64,12 @@ export function POForm({ initial, companies, items, suppliers, dos, zoneTypes, s
           <FIn value={f.quoteRef} onChange={set("quoteRef")} placeholder="019/MIA/V/2024" />
         </FF>
         <FF label="Perusahaan" required span={2}>
-          <FSel value={f.company} onChange={set("company")} options={companies.map((c) => ({ v: c, l: c }))} placeholder="— Pilih perusahaan —" />
+          <SearchInput
+            value={f.company}
+            onChange={set("company")}
+            options={companies.map((c) => ({ v: c, l: c }))}
+            placeholder="Ketik nama perusahaan (tab untuk pilih)..."
+          />
         </FF>
         <FF label="Tanggal Order">
           <SmartDate value={f.orderDate} onChange={set("orderDate")} />

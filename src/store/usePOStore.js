@@ -42,7 +42,9 @@ async function loadKey(key, initVal) {
 
 /* ── Fire-and-forget persist ── */
 function save(key, val) {
-  idbSet(key, val).catch(() => {});
+  idbSet(key, val).catch((err) => {
+    console.error(`IDB Save Error [${key}]:`, err);
+  });
 }
 
 /**
@@ -234,7 +236,10 @@ export const usePOStore = create((set, get) => ({
 
   /* ════════ DO Management ════════ */
   saveDO: (doObj) => set((s) => {
-    const newDos = [...s.dos, doObj];
+    const exists = s.dos.find((d) => d.id === doObj.id);
+    const newDos = exists
+      ? s.dos.map((d) => (d.id === doObj.id ? doObj : d))
+      : [...s.dos, doObj];
 
     // Update item doNos + deliveryDate
     let newItems = s.items.map((i) => {
@@ -271,7 +276,10 @@ export const usePOStore = create((set, get) => ({
         0
       );
       const newDoNos = (i.doNos ?? []).filter((n) => n !== doObj.doNo);
-      const newStatus = total >= i.qty ? "delivered" : total > 0 ? "partial" : "ordered";
+      let newStatus = i.status;
+      if (!["invoiced", "paid"].includes(i.status)) {
+        newStatus = total >= i.qty ? "delivered" : total > 0 ? "partial" : "ordered";
+      }
       return { ...i, doNos: newDoNos, status: newStatus };
     });
     const newPos = syncPOStatuses(s.pos, newItems);
