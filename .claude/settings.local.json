@@ -1,24 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run build)",
-      "Bash(npm install react-window)",
-      "Bash(npm install --save react-window)",
-      "Bash(npm install fuse.js)",
-      "Bash(npm install xlsx)",
-      "Bash(npm install pocketbase)",
-      "Bash(dir /B *.md *.bat .env*)",
-      "Bash(test -f \"C:/pocketbase/pocketbase.exe\")",
-      "Bash(curl -L -o pocketbase.zip \"https://github.com/pocketbase/pocketbase/releases/download/v0.22.9/pocketbase_0.22.9_windows_amd64.zip\")",
-      "Bash(unzip -o pocketbase.zip)",
-      "Bash(curl -s http://localhost:8090/api/health)",
-      "Bash(test -f \"pocketbase-collections.json\")",
-      "Bash(curl -s \"http://localhost:8090/api/collections\")",
-      "Bash(npm run dev)",
-      "Bash(tasklist)",
-      "Bash(findstr /I \"node\")",
-      "Bash(tasklist /FI \"IMAGENAME eq node.exe\")",
-      "Bash(powershell -Command \"Get-Process | Where-Object {$_ProcessName -like ''*node*''} | Select-Object Id, ProcessName\")"
+      "Bash(del \"c:\\Users\\Eddri\\Music\\docvault\\src\\App.jsx.backup\" \"c:\\Users\\Eddri\\Music\\docvault\\src\\store\\usePOStore.js.backup\" \"c:\\Users\\Eddri\\Music\\docvault\\src\\pages\\POList.jsx.editbackup\" \"c:\\Users\\Eddri\\Music\\docvault\\src\\App.pocketbase.jsx\")",
+      "Bash(sort -t: -k2 -rn)",
+      "Bash(npm run lint)"
     ],
     "deny": [],
     "ask": []

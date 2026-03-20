@@ -9,6 +9,7 @@ import { Login } from "./components/Login";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { useToast } from "./hooks";
 import { pb, isAuthenticated } from "./lib/pocketbase";
+import { logger } from "./lib/logger";
 import {
   Dashboard,
   POList,
@@ -66,7 +67,7 @@ export default function App() {
 
   /* ── Handle successful login ── */
   const handleLoginSuccess = (user) => {
-    console.log('✅ User logged in:', user.email);
+    logger.log('✅ User logged in:', user.email);
     setAuthenticated(true);
     init(); // Load data after login
   };

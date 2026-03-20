@@ -6,8 +6,7 @@ import { useState, useEffect } from "react";
 import { Ico, IC, Btn } from "./ui";
 import { usePOStore } from "../store/usePOStore";
 import { VENDOR_NAME } from "../lib/constants";
-import { pb } from "../lib/pocketbase";
-import { isIncompletePO, isOverdue, today } from "../lib/helpers";
+import { isIncompletePO, today } from "../lib/helpers";
 
 const NAV = [
   { id: "dashboard", label: "Dashboard",        icon: IC.dash  },
@@ -83,44 +82,73 @@ export function Layout({ view, setView, onJump, onLogout, children }) {
 
   /* ── Sharing Status Polling ── */
   useEffect(() => {
+    let mounted = true;
+    const abortController = new AbortController();
+
     const checkStatus = async () => {
       try {
-        const res = await fetch("http://localhost:4041/api/sharing/status").then(r => r.json());
-        setSharing(res);
+        const res = await fetch("http://localhost:4041/api/sharing/status", {
+          signal: abortController.signal
+        });
+        if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
+        const data = await res.json();
+        if (mounted) {
+          setSharing(data);
+        }
       } catch (e) {
-        // Fallback to old behavior or silent fail
+        if (e.name !== 'AbortError') {
+          // Fallback to old behavior or silent fail
+        }
       }
     };
     checkStatus();
     const interval = setInterval(checkStatus, 10000);
-    return () => clearInterval(interval);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+      abortController.abort();
+    };
   }, []);
 
   const handleToggleSharing = async () => {
     if (isToggling) return;
-    console.log("Toggle sharing clicked! Current active:", sharing.active);
     setIsToggling(true);
+
+    let timeoutId = null;
+    const abortController = new AbortController();
+
     try {
       const url = "http://localhost:4041/api/sharing/toggle?active=" + !sharing.active;
-      console.log("Sending request to helper:", url);
-      await fetch(url);
-      
+      const response = await fetch(url, { signal: abortController.signal });
+
+      if (!response.ok) {
+        throw new Error(`Failed to toggle: ${response.status}`);
+      }
+
       // Small delay to let ngrok start/stop
-      setTimeout(async () => {
+      timeoutId = setTimeout(async () => {
         try {
-          const res = await fetch("http://localhost:4041/api/sharing/status").then(r => r.json());
-          console.log("New status after toggle:", res);
-          setSharing(res);
+          const res = await fetch("http://localhost:4041/api/sharing/status", {
+            signal: abortController.signal
+          });
+          if (!res.ok) throw new Error('Status fetch failed');
+          const data = await res.json();
+          setSharing(data);
         } catch (statusErr) {
-          console.error("Failed to fetch final status:", statusErr);
+          if (statusErr.name !== 'AbortError') {
+            console.error("Failed to fetch final status:", statusErr);
+          }
         } finally {
           setIsToggling(false);
         }
       }, 3000);
     } catch (e) {
-      alert("Sharing Toggle Error: " + e.message);
-      console.error("Failed to toggle sharing:", e);
+      if (e.name !== 'AbortError') {
+        alert("Sharing Toggle Error: " + e.message);
+        console.error("Failed to toggle sharing:", e);
+      }
       setIsToggling(false);
+      if (timeoutId) clearTimeout(timeoutId);
     }
   };
 

@@ -10,12 +10,7 @@ import {
 } from "../lib/helpers";
 import { fuzzySearchItems } from "../lib/fuzzySearch";
 import { ITEM_STATUS, INIT_PO_STATUS, PAGE_SIZE, DEFAULT_EXCEL_ITEM_COLS } from "../lib/constants";
-
-/* ── Class constants ── */
-const thCls  = "py-1 px-1.5 text-[10px] font-bold text-text-secondary text-left whitespace-nowrap border-b border-border-default uppercase tracking-[.02em] bg-surface-alt cursor-pointer select-none";
-const tdCls  = "py-0.5 px-1.5 border-b border-border-default text-[11px] align-middle";
-const stickyL = "sticky left-0 z-[1] shadow-[3px_0_6px_rgba(0,0,0,0.05)]";
-const stickyR = "sticky right-0 z-[1] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]";
+import { thCls, tdCls, stickyL, stickyR } from "../lib/tableStyles";
 
 export function AllItems({ onJump }) {
   const { items, pos, suppliers, dos, zoneTypes, settings, hsDB, updateItem, deleteItem, addSupplier, toast } = usePOStore();

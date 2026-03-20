@@ -13,13 +13,14 @@ import {
 } from "../lib/helpers";
 import { fuzzySearchPOs } from "../lib/fuzzySearch";
 import { INIT_PO_STATUS, ITEM_STATUS, PAGE_SIZE, mkItem, VENDOR_NAME, DEFAULT_EXCEL_ITEM_COLS, DEFAULT_EXCEL_PO_COLS } from "../lib/constants";
+import { stickyL as tableStickyL, stickyR as tableStickyR } from "../lib/tableStyles";
 import * as XLSX from 'xlsx';
 
-/* ── Class constants ── */
+/* ── Class constants (page-specific overrides) ── */
 const thCls   = "py-2 px-2 text-[11px] font-extrabold text-text-secondary text-left whitespace-nowrap border-b border-border-strong uppercase tracking-[.05em] bg-surface-alt cursor-pointer select-none sticky top-0 z-[10]";
 const tdCls   = "py-2 px-2 border-b border-border-default text-[12px] align-middle";
-const stickyL = "sticky left-0 z-[1] shadow-[3px_0_6px_rgba(0,0,0,0.05)]";
-const stickyR = "sticky right-0 z-[1] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]";
+const stickyL = tableStickyL;
+const stickyR = tableStickyR;
 const doThCls = "py-[5px] px-[10px] text-[9px] font-bold text-text-secondary text-left border-b border-border-default uppercase";
 
 /* ── DODetailPanel (internal) ── */
@@ -960,13 +961,35 @@ export function POList() {
                           <Ico d={IC.truck} size={11} color="var(--color-brand)" />
                         </Btn>
                         <Btn size="sm" variant="ghost" title="Duplikat PO" className="!p-0 w-[24px] h-[24px] justify-center"
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            const nid   = uid();
-                            const nPO   = { ...po, id: nid, orderNo: `COPY-${po.orderNo}`, orderDate: today(), status: "draft", createdAt: today() };
-                            const nItms = items.filter((i) => i.poId === po.id).map((i) => ({ ...i, id: nid, poId: nid, status: "ordered", doNos: [], deliveryDate: "", invoiceNo: "" }));
-                            addPO(nPO, nItms);
-                            toast("✓ PO diduplikat");
+                            try {
+                              const nPOId = uid();
+                              const nPO = {
+                                ...po,
+                                id: nPOId,
+                                orderNo: `COPY-${po.orderNo}`,
+                                orderDate: today(),
+                                status: "draft",
+                                createdAt: today()
+                              };
+                              const nItms = items
+                                .filter((i) => i.poId === po.id)
+                                .map((i) => ({
+                                  ...i,
+                                  id: uid(), // Unique ID for each item
+                                  poId: nPOId,
+                                  status: "ordered",
+                                  doNos: [],
+                                  deliveryDate: "",
+                                  invoiceNo: ""
+                                }));
+                              await addPO(nPO, nItms);
+                              toast("✓ PO diduplikat");
+                            } catch (error) {
+                              toast("✗ Gagal menduplikat PO");
+                              console.error(error);
+                            }
                           }}
                         >
                           <Ico d={IC.copy} size={11} />

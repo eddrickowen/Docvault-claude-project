@@ -5,10 +5,9 @@ import { useConfirm } from "../hooks";
 import { usePOStore } from "../store/usePOStore";
 import { itemNet, itemMargin, fmt, fmtShort } from "../lib/helpers";
 import { ITEM_STATUS } from "../lib/constants";
+import { thCls, tdCls } from "../lib/tableStyles";
 
 /* ── Class constants ── */
-const thCls = "py-1 px-1.5 text-[10px] font-bold text-text-secondary text-left whitespace-nowrap border-b border-border-default uppercase tracking-[.04em] bg-surface-alt";
-const tdCls = "py-0.5 px-1.5 border-b border-border-default text-[11px] align-middle";
 const tabBtnActive = "py-[5px] px-3.5 rounded-[5px] border-none font-semibold text-[11px] cursor-pointer capitalize bg-surface text-text-primary shadow-sm";
 const tabBtnIdle   = "py-[5px] px-3.5 rounded-[5px] border-none font-semibold text-[11px] cursor-pointer capitalize bg-transparent text-text-muted";
 

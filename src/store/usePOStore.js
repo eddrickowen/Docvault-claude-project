@@ -4,6 +4,7 @@
  */
 import { create } from "zustand";
 import { pb, collections, dbHelpers, cleanRecord } from "../lib/pocketbase";
+import { logger } from "../lib/logger";
 import {
   INIT_POS, INIT_ITEMS, INIT_SUPPLIERS, INIT_DOS,
   INIT_COMPANIES, INIT_ZONE_TYPES, INIT_SETTINGS, INIT_HS_DB, UOM_OPTIONS,
@@ -83,14 +84,14 @@ export const usePOStore = create((set, get) => ({
   /* ── Init: load all data from PocketBase ── */
   init: async () => {
     try {
-      console.log('🔄 Loading data from PocketBase...');
+      logger.log('🔄 Loading data from PocketBase...');
 
       // Load all data with step-by-step logging
       const pos = await dbHelpers.getAll('pos');
-      console.log(`📦 POs [${pos.length}]`);
+      logger.log(`📦 POs [${pos.length}]`);
       
       const items = await dbHelpers.getAll('items');
-      console.log(`📦 Items [${items.length}]`);
+      logger.log(`📦 Items [${items.length}]`);
       
       const suppliers = await dbHelpers.getAll('suppliers');
       const dos       = await dbHelpers.getAll('dos');
@@ -107,7 +108,7 @@ export const usePOStore = create((set, get) => ({
           settings = sObj?.value || INIT_SETTINGS;
         }
       } catch (e) {
-        console.warn('Settings not found, using defaults');
+        logger.warn('Settings not found, using defaults');
       }
 
       // Load UOM
@@ -118,10 +119,10 @@ export const usePOStore = create((set, get) => ({
           uom = uomRecords.value || UOM_OPTIONS;
         }
       } catch (e) {
-        console.warn('UOM not found, using defaults');
+        logger.warn('UOM not found, using defaults');
       }
 
-      console.log('✅ Data loaded:', { pos: pos.length, items: items.length, suppliers: suppliers.length });
+      logger.log('✅ Data loaded:', { pos: pos.length, items: items.length, suppliers: suppliers.length });
 
       set({
         pos,
@@ -161,11 +162,11 @@ export const usePOStore = create((set, get) => ({
 
   /* ── Real-time subscriptions ── */
   _subscribeToRealtime: () => {
-    console.log('🔔 Setting up real-time subscriptions...');
+    logger.log('🔔 Setting up real-time subscriptions...');
 
     // Subscribe to POs
     pb.collection('pos').subscribe('*', (e) => {
-      console.log('🔄 PO changed:', e.action, e.record);
+      logger.log('🔄 PO changed:', e.action, e.record);
       set((state) => {
         if (e.action === 'create') {
           return { pos: [...state.pos, e.record] };
@@ -182,7 +183,7 @@ export const usePOStore = create((set, get) => ({
 
     // Subscribe to Items
     pb.collection('items').subscribe('*', (e) => {
-      console.log('🔄 Item changed:', e.action, e.record);
+      logger.log('🔄 Item changed:', e.action, e.record);
       set((state) => {
         let newItems = state.items;
         if (e.action === 'create') {
@@ -219,7 +220,7 @@ export const usePOStore = create((set, get) => ({
       });
     });
 
-    console.log('✅ Real-time subscriptions active');
+    logger.log('✅ Real-time subscriptions active');
   },
 
   /* ── Toast ── */

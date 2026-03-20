@@ -3,8 +3,9 @@ import { Ico, IC, FIn, FSel } from "../components/ui";
 import { CopyTSVButton } from "../components/shared";
 import { usePOStore } from "../store/usePOStore";
 import { calcPOTotals, diffDays, fmt, fmtDate, agingColor, agingBg } from "../lib/helpers";
+import { thCls as baseThCls, tdCls as baseTdCls } from "../lib/tableStyles";
 
-/* ── Class constants ── */
+/* ── Class constants (page-specific overrides) ── */
 const thCls = "py-[9px] px-[10px] text-[9px] font-bold text-text-secondary text-left border-b-2 border-border-default uppercase tracking-[.04em] bg-surface-alt";
 const tdCls = "py-[9px] px-[10px] border-b border-border-default text-xs align-middle";
 

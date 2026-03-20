@@ -1,11 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, memo } from "react";
 import { Ico, IC } from "./Icon";
 
 /**
  * Modal dialog overlay.
  * Props: open, onClose, title, children, wide, xwide, noPad
+ * Memoized to prevent unnecessary re-renders.
  */
-export function Modal({ open, onClose, title, children, wide, xwide, noPad }) {
+export const Modal = memo(function Modal({ open, onClose, title, children, wide, xwide, noPad }) {
   /* ── Escape key closes modal ── */
   useEffect(() => {
     if (!open) return;
@@ -48,4 +49,4 @@ export function Modal({ open, onClose, title, children, wide, xwide, noPad }) {
       </div>
     </div>
   );
-}
+});

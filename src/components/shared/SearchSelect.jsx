@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, memo } from "react";
 import { Ico, IC } from "../ui";
 
 /**
  * Searchable dropdown with position:fixed — replaces FSel for key fields.
+ * Memoized to prevent unnecessary re-renders.
  */
-export function SearchSelect({ value, onChange, options, placeholder, className = "" }) {
+export const SearchSelect = memo(function SearchSelect({ value, onChange, options, placeholder, className = "" }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const btnRef = useRef();
@@ -95,4 +96,4 @@ export function SearchSelect({ value, onChange, options, placeholder, className 
       )}
     </div>
   );
-}
+});

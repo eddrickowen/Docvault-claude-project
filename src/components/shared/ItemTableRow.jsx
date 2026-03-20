@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Btn, Ico, IC, SPill } from "../ui";
 import { InlineCell } from "./InlineCell";
 import { fmt, fmtShort, itemNet, itemMargin, getQtyDel, fmtDate } from "../../lib/helpers";
@@ -6,8 +7,9 @@ import { ITEM_STATUS } from "../../lib/constants";
 /**
  * ItemTableRow - Shared component for PO item rows.
  * Replaces duplicated logic in POList and AllItems.
+ * Memoized to prevent unnecessary re-renders.
  */
-export function ItemTableRow({
+export const ItemTableRow = memo(function ItemTableRow({
   item,
   po,
   subIdx,
@@ -195,4 +197,4 @@ export function ItemTableRow({
       </td>
     </tr>
   );
-}
+});
