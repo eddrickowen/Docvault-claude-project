@@ -64,7 +64,7 @@ export function ItemForm({ initial, poId, zoneTypes, suppliers, dos, hsDB = [], 
       if (e.ctrlKey && e.key === "Enter") {
         if (canSave) {
           e.preventDefault();
-          onSave({ ...f, id: f.id || ("item" + uid()), poId });
+          onSave({ ...f, id: f.id || uid(), poId });
         }
       }
     };
@@ -91,7 +91,7 @@ export function ItemForm({ initial, poId, zoneTypes, suppliers, dos, hsDB = [], 
               value={f.unitPrice} 
               onChange={set("unitPrice")} 
               min={0} 
-              onKeyDown={(e) => e.key === "Enter" && canSave && onSave({ ...f, id: f.id || ("item" + uid()), poId })} 
+              onKeyDown={(e) => e.key === "Enter" && canSave && onSave({ ...f, id: f.id || uid(), poId })} 
             />
           </FF>
           <FF label="Zone Type">
@@ -225,7 +225,7 @@ export function ItemForm({ initial, poId, zoneTypes, suppliers, dos, hsDB = [], 
       <div className="flex justify-end gap-2 pt-2.5">
         {onClose && <Btn onClick={onClose} variant="secondary">Batal</Btn>}
         <Btn
-          onClick={() => canSave && onSave({ ...f, id: f.id || ("item" + uid()), poId })}
+          onClick={() => canSave && onSave({ ...f, id: f.id || uid(), poId })}
           disabled={!canSave}
         >
           <Ico d={IC.save} size={12} /> Simpan Item

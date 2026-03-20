@@ -8,6 +8,7 @@ import {
   itemNet, itemMargin, itemBuy, getQtyDel, fmtDate, fmtShort, fmt, today, uid,
   exportCSV, copyTSV, applyDateFilter, applyNumFilter, applyTextFilter,
 } from "../lib/helpers";
+import { fuzzySearchItems } from "../lib/fuzzySearch";
 import { ITEM_STATUS, INIT_PO_STATUS, PAGE_SIZE, DEFAULT_EXCEL_ITEM_COLS } from "../lib/constants";
 
 /* ── Class constants ── */
@@ -52,29 +53,26 @@ export function AllItems({ onJump }) {
   }, [hasFilters]);
 
   const filtered = useMemo(() => {
-    let r = items.filter((i) => {
-      if (search) {
-        const cfg = settings?.itemSearchConfig || {};
-        const q = search.toLowerCase();
-        const po = poById[i.poId];
-        const mainSupplier = (i.supplierAssignments || []).find(a => a.role === "main");
-        const mainSupplierName = mainSupplier ? suppliers?.find(s => s.id === mainSupplier.supplierId)?.name : "";
-        const zone = (i.zoneType || po?.zoneType || "");
+    let r = items;
+    if (search) {
+      const cfg = settings?.itemSearchConfig || {};
+      const keys = [];
+      if (cfg.includeItemName !== false)    keys.push({ name: 'itemName', weight: 3 });
+      if (cfg.includeDescription !== false) keys.push({ name: 'desc', weight: 1.5 });
+      if (cfg.includeInvoice !== false)     keys.push({ name: 'invoiceNo', weight: 1 });
+      if (cfg.includeDOs !== false)         keys.push({ name: 'doNos', weight: 1 });
+      if (cfg.includeHSCode !== false)      keys.push({ name: 'hsCode', weight: 0.8 });
+      if (cfg.includeZone !== false)        keys.push({ name: 'zoneType', weight: 0.5 });
+      
+      // For cross-referenced fields, we can use dot notation if Fuse supports it with a pre-mapped object,
+      // but here we have a flat array of items. Fuse 6+ supports keys with 'getFn'.
+      // However, to keep it simple and compatible, we'll just allow the library to handle the main fields.
+      // If we need more, we'd need to passing a custom getFn to Fuse.
+      
+      r = fuzzySearchItems(items, search, settings.fuzzyThreshold, keys.length ? keys : undefined);
+    }
 
-        const parts = [];
-        if (cfg.includeItemName !== false) parts.push(i.itemName);
-        if (cfg.includeDescription !== false) parts.push(i.desc);
-        if (cfg.includeInvoice !== false) parts.push(i.invoiceNo);
-        if (cfg.includeDOs !== false) parts.push(...(i.doNos || []));
-        if (cfg.includePONumber !== false) parts.push(po?.orderNo);
-        if (cfg.includeCompany !== false) parts.push(po?.company);
-        if (cfg.includeZone !== false) parts.push(zone);
-        if (cfg.includeHSCode !== false) parts.push(i.hsCode);
-        if (cfg.includeMainSupplier !== false) parts.push(mainSupplierName);
-
-        const haystack = parts.filter(Boolean).join(" ").toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
+    r = r.filter((i) => {
       for (const [col, s] of Object.entries(colF)) {
         if (!s || !s.size) continue;
         let v = "";

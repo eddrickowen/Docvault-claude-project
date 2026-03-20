@@ -46,7 +46,7 @@ export function DOGeneratorModal({ po, preSelect = new Set(), items, dos, settin
   const sel = lines.filter((l) => l.selected && l.qtyDelivered > 0);
 
   const buildDO = () => ({
-    id: "do" + uid(),
+    id: uid(),
     doNo: form.doNo,
     poId: po.id,
     createdAt: today(),

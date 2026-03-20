@@ -11,11 +11,13 @@ import {
   exportCSV, copyTSV, applyDateFilter, applyNumFilter, applyTextFilter,
   itemNet, itemMargin, itemBuy
 } from "../lib/helpers";
+import { fuzzySearchPOs } from "../lib/fuzzySearch";
 import { INIT_PO_STATUS, ITEM_STATUS, PAGE_SIZE, mkItem, VENDOR_NAME, DEFAULT_EXCEL_ITEM_COLS, DEFAULT_EXCEL_PO_COLS } from "../lib/constants";
+import * as XLSX from 'xlsx';
 
 /* ── Class constants ── */
-const thCls   = "py-1 px-1.5 text-[10px] font-bold text-text-secondary text-left whitespace-nowrap border-b border-border-default uppercase tracking-[.02em] bg-surface-alt cursor-pointer select-none";
-const tdCls   = "py-0.5 px-1.5 border-b border-border-default text-[11px] align-middle";
+const thCls   = "py-2 px-2 text-[11px] font-extrabold text-text-secondary text-left whitespace-nowrap border-b border-border-strong uppercase tracking-[.05em] bg-surface-alt cursor-pointer select-none sticky top-0 z-[10]";
+const tdCls   = "py-2 px-2 border-b border-border-default text-[12px] align-middle";
 const stickyL = "sticky left-0 z-[1] shadow-[3px_0_6px_rgba(0,0,0,0.05)]";
 const stickyR = "sticky right-0 z-[1] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]";
 const doThCls = "py-[5px] px-[10px] text-[9px] font-bold text-text-secondary text-left border-b border-border-default uppercase";
@@ -395,12 +397,22 @@ export function POList() {
   const csvRef = useRef();
   const { ask, ConfirmModal } = useConfirm();
 
+  // Pre-compute itemsByPoId Map for O(1) lookups - major performance boost
+  const itemsByPoId = useMemo(() => {
+    const map = new Map();
+    items.forEach((i) => {
+      if (!map.has(i.poId)) map.set(i.poId, []);
+      map.get(i.poId).push(i);
+    });
+    return map;
+  }, [items]);
+
   const sortedFiltered = useMemo(() => {
-    let r = pos.filter((p) => {
-      if (search) {
-        const q = search.toLowerCase();
-        if (!(p.orderNo?.toLowerCase().includes(q) || p.company?.toLowerCase().includes(q) || p.quoteRef?.toLowerCase().includes(q) || p.notes?.toLowerCase().includes(q))) return false;
-      }
+    // Use fuzzy search if query provided, otherwise use all POs
+    let r = search ? fuzzySearchPOs(pos, search, settings.fuzzyThreshold) : pos;
+
+    // Apply other filters
+    r = r.filter((p) => {
       for (const [col, s] of Object.entries(colF)) {
         if (!s || !s.size) continue;
         let v = "";
@@ -427,11 +439,15 @@ export function POList() {
     return [...r].sort((a, b) => {
       let av = a[sort.col] ?? "", bv = b[sort.col] ?? "";
       if (sort.col === "total") { av = calcPOTotals(a, items).total; bv = calcPOTotals(b, items).total; }
-      if (sort.col === "items") { av = items.filter((i) => i.poId === a.id).length; bv = items.filter((i) => i.poId === b.id).length; }
+      if (sort.col === "items") {
+        // Use pre-computed Map for O(1) lookup instead of O(n) filter
+        av = (itemsByPoId.get(a.id) || []).length;
+        bv = (itemsByPoId.get(b.id) || []).length;
+      }
       const d = typeof av === "number" ? av - bv : String(av).localeCompare(String(bv));
       return sort.dir === "asc" ? d : -d;
     });
-  }, [pos, items, search, sort, colF, dateF, numF, textF]);
+  }, [pos, items, search, sort, colF, dateF, numF, textF, itemsByPoId]);
 
   const paged = getPaged(sortedFiltered);
 
@@ -499,52 +515,168 @@ export function POList() {
     reader.readAsText(file);
   };
 
-  const processImportedData = (mappedRows) => {
+  const processImportedData = async (mappedRows) => {
     try {
       if (!mappedRows || !mappedRows.length) throw new Error("Tidak ada data valid yang dipilih");
-      
-      const newPOs = []; const newItems = [];
-      const unknownComps = new Set();
-      
-      mappedRows.forEach((row) => {
-        const orderNo = row.orderNo?.trim();
-        const company = row.company?.trim();
-        if (!orderNo || !company) return;
 
-        if (!companies.some(c => (c.name || "").toLowerCase() === company.toLowerCase())) {
-          unknownComps.add(company);
+      const newPOs = []; 
+      const newItems = [];
+      const unknownComps = new Set();
+      const hsCodesToSync = new Map(); // code -> desc
+      const zonesToSync = new Set();
+      const duplicatePOs = new Set();
+      
+      // Get current POs for faster duplicate checking
+      const existingOrderNos = new Set(pos.map(p => p.orderNo.toLowerCase()));
+
+      let lastOrderNo = "";
+      let lastCompany = "";
+
+      mappedRows.forEach((row) => {
+        let orderNo = row.orderNo?.trim();
+        let company = row.company?.trim();
+        const itemName = row.itemName?.trim();
+
+        // Skip summary rows
+        if (itemName?.toUpperCase() === "TOTAL") return;
+
+        // Fill-down logic: If company is missing but order matches last, inherit company
+        // Update last trackers IMMEDIATELY if provided in this row
+        if (orderNo) lastOrderNo = orderNo;
+        if (company) lastCompany = company;
+
+        // Fill-down from trackers if missing in this row
+        if (!orderNo) orderNo = lastOrderNo;
+        if (!company) company = lastCompany;
+
+        // Final validation for THIS row's data
+        if (!orderNo || !company) return; // Still need a PO context
+        
+        // Check for duplicates in existing database AND current import batch
+        const lowerOrderNo = orderNo.toLowerCase();
+        const isExistingInDB = existingOrderNos.has(lowerOrderNo);
+        
+        if (isExistingInDB) {
+          duplicatePOs.add(orderNo);
+          // DON'T return/skip! We need to process the item in this row if it belongs to this PO.
         }
 
-        let po = newPOs.find((p) => p.orderNo === orderNo);
-        if (!po) {
-          po = { id: "po" + uid(), quoteRef: row.quoteRef || "", orderNo, company, orderDate: parseSmartDate(row.orderDate || "") || today(), prNo: "", notes: row.desc || "", folder: "", status: mapPOSt(row.poStatus), priority: "normal", totalLocked: false, manualExPPN: parseIDR(row.poExPPN || 0), manualPPN: parseIDR(row.poPPN || 0) };
+        // FIX: companies is array of strings
+        const companyExists = companies.some(c => {
+          const cName = (typeof c === 'string' ? c : c.name || "").toLowerCase();
+          return cName === company.toLowerCase();
+        });
+        if (!companyExists) {
+          unknownComps.add(company);
+        }
+        
+        if (row.hsCode) hsCodesToSync.set(row.hsCode, itemName || "");
+        if (row.zoneType) zonesToSync.add(row.zoneType);
+
+        if (!itemName) return; // This row has no item to add, but it successfully updated the trackers
+
+        let po = newPOs.find((p) => p.orderNo.toLowerCase() === lowerOrderNo);
+        if (!po && !isExistingInDB) {
+          // Create PO record if it doesn't exist in DB and hasn't been created in this batch yet
+          const tempId = uid();
+          po = {
+            tempId, // Temporary ID for linking items
+            quoteRef: row.quoteRef || "",
+            orderNo,
+            company,
+            orderDate: parseSmartDate(row.orderDate || "") || today(),
+            prNo: "",
+            notes: row.desc || "",
+            folder: "",
+            status: mapPOSt(row.poStatus),
+            priority: "normal",
+            totalLocked: false,
+            manualExPPN: parseIDR(row.poExPPN || 0),
+            manualPPN: parseIDR(row.poPPN || 0)
+          };
           if (po.manualExPPN > 0) po.totalLocked = true;
           newPOs.push(po);
         }
-        
-        const iName = row.itemName?.trim();
-        if (iName) {
+
+        if (itemName) {
           const up      = parseIDR(row.unitPrice || 0);
           const qty     = parseFloat(row.qty || 1) || 1;
           const disc    = parseIDR(row.discount || 0);
           const discPct = parseFloat(row.discountPct || 0);
-          newItems.push(mkItem({ id: "item" + uid(), poId: po.id, itemName: iName, desc: row.desc || "", qty, unit: row.unit || "pcs", unitPrice: up, discount: discPct > 0 ? Math.round(up * qty * discPct / 100) : disc, discountPct: discPct, status: mapItemSt(row.itemStatus || ""), deliveryDate: parseSmartDate(row.deliveryDate || ""), invoiceNo: row.invoiceNo || "", zoneType: row.zoneType || "", hsCode: row.hsCode || "" }));
+          
+          // Use tempId from the batch PO or a special "db-" prefix for existing POs
+          const linkId = po ? po.tempId : `db-${lowerOrderNo}`;
+          
+          newItems.push(mkItem({
+            poTempId: linkId,
+            itemName: itemName,
+            desc: row.desc || "",
+            qty,
+            unit: row.unit || "pcs",
+            unitPrice: up,
+            discount: discPct > 0 ? Math.round(up * qty * discPct / 100) : disc,
+            discountPct: discPct,
+            status: mapItemSt(row.itemStatus || ""),
+            deliveryDate: parseSmartDate(row.deliveryDate || ""),
+            invoiceNo: row.invoiceNo || "",
+            zoneType: row.zoneType || "",
+            hsCode: row.hsCode || ""
+          }));
         }
       });
 
-      const finalizeImport = () => {
-        unknownComps.forEach(name => addCompany({ id: "comp" + uid(), name, address: "", phone: "", notes: "" }));
-        newPOs.forEach((p) => addPO(p, newItems.filter((i) => i.poId === p.id)));
-        toast(`✓ Import selesai: ${newPOs.length} PO, ${newItems.length} item`);
-        setImportData(null);
+      const finalizeImport = async () => {
+        try {
+          toast(`🔄 Mengimpor ${newPOs.length} PO dan ${newItems.length} item...`);
+
+          // Sync metadata collections
+          for (const name of unknownComps) await addCompany(name);
+          for (const [code, desc] of hsCodesToSync) await usePOStore.getState().upsertHSCode(code, desc);
+          for (const zone of zonesToSync) await usePOStore.getState().upsertZoneType(zone);
+
+          // Then add POs with their items
+          let poCount = 0;
+          for (const p of newPOs) {
+            const { tempId, ...poData } = p;
+            const cleanItems = newItems.filter((i) => i.poTempId === tempId).map(({ poTempId, ...itemData }) => itemData);
+
+            await addPO(poData, cleanItems);
+            poCount++;
+            if (poCount % 5 === 0 || poCount === newPOs.length) {
+              toast(`📦 Mengimpor PO... ${poCount}/${newPOs.length}`);
+            }
+          }
+
+          let msg = `✓ Import selesai: ${newPOs.length} PO, ${newItems.length} item`;
+          if (duplicatePOs.size > 0) {
+            msg += `. ${duplicatePOs.size} PO diabaikan (sudah ada)`;
+          }
+          toast(msg);
+          
+          // Reset filters and search to show the new data
+          resetFilters();
+          setImportData(null);
+        } catch (err) {
+          toast("✗ Error saat menyimpan: " + err.message);
+          console.error("Import error:", err);
+        }
       };
 
-      if (unknownComps.size > 0) {
-        ask(`Ada ${unknownComps.size} Perusahaan baru (${[...unknownComps].slice(0, 3).join(", ")}${unknownComps.size > 3 ? "..." : ""}) yang belum terdaftar. Tambahkan otomatis dan lanjutkan import?`, finalizeImport, { confirmLabel: "Ya, Proses Import" });
-      } else {
-        finalizeImport();
+      if (newPOs.length === 0) {
+        toast(`⚠️ Tidak ada PO baru untuk diimpor. ${duplicatePOs.size} PO sudah ada.`);
+        setImportData(null);
+        return;
       }
-    } catch (err) { toast("✗ Import gagal: " + err.message); setImportData(null); }
+
+      if (unknownComps.size > 0) {
+        ask(`Ada ${unknownComps.size} Perusahaan baru yang belum terdaftar. Tambahkan otomatis dan lanjutkan import?`, finalizeImport, { confirmLabel: "Ya, Proses Import" });
+      } else {
+        await finalizeImport();
+      }
+    } catch (err) {
+      toast("✗ Import gagal: " + err.message);
+      setImportData(null);
+    }
   };
 
   const bulkSetStatus = (st) => {
@@ -552,9 +684,16 @@ export function POList() {
     toast(`Status ${bulkSel.size} PO diubah`);
   };
   const bulkDelete = () => {
-    ask(`Hapus ${bulkSel.size} PO beserta seluruh item dan DO-nya?`, () => {
-      [...bulkSel].forEach((id) => deletePO(id));
-      toast(`✓ ${bulkSel.size} PO dihapus`);
+    ask(`Hapus ${bulkSel.size} PO beserta seluruh item dan DO-nya?`, async () => {
+      toast(`🔄 Menghapus ${bulkSel.size} PO...`);
+      const ids = [...bulkSel];
+      let count = 0;
+      for (const id of ids) {
+        await deletePO(id);
+        count++;
+        if (count % 10 === 0) toast(`🗑️ Menghapus... ${count}/${ids.length}`);
+      }
+      toast(`✓ ${ids.length} PO dihapus`);
       setBulkSel(new Set());
     }, { danger: true, confirmLabel: "Ya, Hapus Semua" });
   };
@@ -566,6 +705,46 @@ export function POList() {
       return [p.orderNo, p.quoteRef, p.company, p.orderDate, INIT_PO_STATUS[p.status]?.label || p.status, p.prNo, t.exPPN, t.ppn, t.total, `${pr.del}/${pr.n}`, `${pr.inv}/${pr.n}`, `${pr.paid}/${pr.n}`, pr.n];
     });
     exportCSV(h, r, `PO_export_${today()}.csv`);
+  };
+
+  const handleExportExcel = () => {
+    const h = ["No PO", "Quote Ref", "Perusahaan", "Tgl Order", "Status PO", "PR No", "Ex PPN", "PPN", "Total", "Item Terkirim", "Item Invoiced", "Item Paid", "Total Item"];
+    const r = sortedFiltered.map((p) => {
+      const t = calcPOTotals(p, items); const pr = getPOProgress(p.id, items);
+      return [p.orderNo, p.quoteRef, p.company, fmtDate(p.orderDate), INIT_PO_STATUS[p.status]?.label || p.status, p.prNo, t.exPPN, t.ppn, t.total, `${pr.del}/${pr.n}`, `${pr.inv}/${pr.n}`, `${pr.paid}/${pr.n}`, pr.n];
+    });
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([h, ...r]);
+
+    // Set column widths
+    ws['!cols'] = [
+      {wch: 20}, // No PO
+      {wch: 18}, // Quote Ref
+      {wch: 25}, // Company
+      {wch: 12}, // Date
+      {wch: 12}, // Status
+      {wch: 15}, // PR No
+      {wch: 15}, // Ex PPN
+      {wch: 12}, // PPN
+      {wch: 15}, // Total
+      {wch: 12}, // Delivered
+      {wch: 12}, // Invoiced
+      {wch: 12}, // Paid
+      {wch: 10}, // Total Items
+    ];
+
+    // Style header row (bold)
+    const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "E3F2FD" } } };
+    h.forEach((_, idx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: idx });
+      if (ws[cellRef]) ws[cellRef].s = headerStyle;
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws, "Purchase Orders");
+    XLSX.writeFile(wb, `PO_export_${today()}.xlsx`);
+    toast("✓ Excel file exported");
   };
 
   const getCopyTSVData = () => {
@@ -610,16 +789,16 @@ export function POList() {
   };
 
   const COLS = [
-    { col: "orderNo",  label: settings?.labelNoPO || "No PO/Order",    ft: "text", fk: "orderNo" },
-    { col: "company",  label: "Perusahaan",      ft: "col" },
-    { col: "orderDate",label: "Tgl Order",       ft: "date", fk: "orderDate" },
-    { col: "status",   label: "Status",          ft: "col" },
-    { col: "priority", label: "Prior.",          ft: "col" },
-    { col: "items",    label: "Items/Progress",  ft: "col" },
-    { col: "total",    label: "Total",           ft: "num",  fk: "total" },
-    { col: "zone",     label: "Zone",            ft: "col",  keyFn: (p) => getPOZone(p.id, items), labelFn: (p) => getPOZone(p.id, items) },
-    { col: "notes",    label: "Note",            ft: "text", fk: "notes" },
-    { col: "aging",    label: "Aging",           ft: null,   noSort: true },
+    { col: "orderNo",  label: settings?.labelNoPO || "PO Number",    ft: "text", fk: "orderNo" },
+    { col: "company",  label: "Company",             ft: "col" },
+    { col: "orderDate",label: "Date",                ft: "date", fk: "orderDate" },
+    { col: "status",   label: "Status",               ft: "col" },
+    { col: "priority", label: "Priority",            ft: "col" },
+    { col: "items",    label: "Items",               ft: "col" },
+    { col: "total",    label: "Total",                ft: "num",  fk: "total" },
+    { col: "zone",     label: "Zone",                 ft: "col",  keyFn: (p) => getPOZone(p.id, items), labelFn: (p) => getPOZone(p.id, items) },
+    { col: "aging",    label: "Aging",                ft: null,   noSort: true },
+    { col: "notes",    label: "Note",                 ft: "text", fk: "notes" },
   ];
 
   useEffect(() => {
@@ -632,6 +811,8 @@ export function POList() {
     <div className="flex flex-col h-full w-full">
       <ConfirmModal />
 
+
+
       <DataTableToolbar
         search={search} setSearch={setSearch} setPage={setPage}
         hasFilters={hasFilters} resetFilters={resetFilters}
@@ -640,25 +821,26 @@ export function POList() {
         totalCount={sortedFiltered.length}
         labelPostfix="PO"
         primaryAction={
-          <Btn id="btn-new-po" size="sm" variant="primary" onClick={() => { setEditPO(null); setShowForm(true); }}>
-            <Ico d={IC.plus} size={12} /> PO Baru
+          <Btn id="btn-new-po" size="sm" variant="primary" className="!px-4 !py-1.5 shadow-sm hover:translate-y-[-1px] transition-all" onClick={() => { setEditPO(null); setShowForm(true); }}>
+            <Ico d={IC.plus} size={13} /> New PO
           </Btn>
         }
         bulkActions={
           <>
             <FSel value="" onChange={(v) => { if (v) bulkSetStatus(v); }} placeholder="Set Status..."
               options={Object.entries(INIT_PO_STATUS).map(([k, v]) => ({ v: k, l: v.label }))}
-              className="!py-0.5 !px-1.5 w-[130px]"
+              className="!py-1 !px-2 w-[140px] text-[11px] font-semibold"
             />
-            <Btn size="sm" variant="danger" onClick={bulkDelete}><Ico d={IC.trash} size={10} /> Hapus</Btn>
-            <Btn size="sm" variant="blue" className="!px-3" onClick={handleBulkCopyPOs}>
-              <Ico d={IC.copy} size={11} /> Copy {bulkSel.size} Terpilih
+            <Btn size="sm" variant="danger" className="!py-1 !px-2.5 font-semibold" onClick={bulkDelete}><Ico d={IC.trash} size={11} /> Hapus</Btn>
+            <Btn size="sm" variant="blue" className="!px-4 !py-1" onClick={handleBulkCopyPOs}>
+              <Ico d={IC.copy} size={12} /> Copy {bulkSel.size}
             </Btn>
             <Btn size="sm" variant="ghost" onClick={clearBulk}><Ico d={IC.close} size={10} /></Btn>
           </>
         }
         exportActions={
           <>
+            <Btn size="sm" variant="success" onClick={handleExportExcel}><Ico d={IC.dl} size={11} /> Excel</Btn>
             <Btn size="sm" variant="secondary" onClick={handleExportCSV}><Ico d={IC.dl} size={11} /> CSV</Btn>
             <CopyTSVButton filename={`PO_export_${today()}.tsv`} data={getCopyTSVData} size="sm" variant="ghost" />
             <Btn size="sm" variant="secondary" disabled={csvLoading} onClick={() => csvRef.current?.click()}>
@@ -763,13 +945,14 @@ export function POList() {
                     </td>
                     <td className={`${tdCls} font-mono font-bold whitespace-nowrap`}>{fmtShort(tots.total)}</td>
                     <td className={`${tdCls} text-[11px] text-text-secondary`}>{getPOZone(po.id, items)}</td>
-                    <td className={`${tdCls} w-[60px] text-right`} onClick={(e) => e.stopPropagation()}>
+                    <td className={`${tdCls} w-[60px] text-right`}>
                       {agingDays >= 0
                         ? <span className="text-[11px] font-bold px-[7px] py-0.5 rounded-[5px] whitespace-nowrap" style={{ color: agingColor(agingDays), background: agingBg(agingDays) }}>{agingDays}h</span>
                         : <span className="text-[10px] text-text-muted">–</span>}
                     </td>
-                    <td className={`${tdCls} ${stickyR} ${cellBg} !p-[4px_6px]`} onClick={(e) => e.stopPropagation()}>
-                      <div className="flex gap-[3px] flex-wrap justify-end">
+                    <td className={`${tdCls} truncate max-w-[250px] text-[10px] text-text-muted`} title={po.notes}>{po.notes || "–"}</td>
+                    <td className={`${tdCls} ${stickyR} ${cellBg} !p-[4px_12px] w-[120px]`} onClick={(e) => e.stopPropagation()}>
+                      <div className="flex gap-[6px] justify-end items-center">
                         <Btn size="sm" variant="ghost" title="Edit PO" className="!p-0 w-[24px] h-[24px] justify-center" onClick={() => { setEditPO(po); setShowForm(true); }}>
                           <Ico d={IC.edit} size={11} />
                         </Btn>
@@ -802,7 +985,7 @@ export function POList() {
                   </tr>
                   {isExp && (
                     <tr key={po.id + "_exp"}>
-                      <td colSpan={11} className="p-0">
+                      <td colSpan={12} className="p-0 border-b border-border-default bg-surface-alt/30">
                         <ExpandedRow
                           po={po} items={items} suppliers={suppliers} dos={dos}
                           zoneTypes={zoneTypes} settings={settings} hsDB={hsDB}

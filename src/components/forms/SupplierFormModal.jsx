@@ -77,7 +77,7 @@ export function SupplierFormModal({ initial, onSave, onClose }) {
       <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-border-default">
         <Btn onClick={onClose} variant="secondary">Batal</Btn>
         <Btn
-          onClick={() => f.name.trim() && onSave({ ...f, id: f.id || ("SUP" + uid()) })}
+          onClick={() => f.name.trim() && onSave(f)}
           disabled={!f.name.trim()}
         >
           <Ico d={IC.save} size={12} /> Simpan

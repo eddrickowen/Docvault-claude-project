@@ -1,0 +1,85 @@
+/**
+ * App — root entry. Only routing state + page rendering.
+ * All data state lives in usePOStore. Shell layout lives in Layout.
+ */
+import { useState, useEffect, useCallback } from "react";
+import { usePOStore } from "./store/usePOStore";
+import { Layout } from "./components/Layout";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary";
+import { useToast } from "./hooks";
+import {
+  Dashboard,
+  POList,
+  AllItems,
+  SupplierPage,
+  MarginAnalysis,
+  ARAgingReport,
+  Settings,
+} from "./pages";
+
+export default function App() {
+  const { init, _loaded, _toast, setJumpTargetPO } = usePOStore();
+  const [view, setView] = useState("dashboard");
+  const { show: toast, Toast } = useToast();
+
+  /* ── Bootstrap store ── */
+  useEffect(() => { init(); }, []);
+
+  /* ── Bridge store toast → useToast UI ── */
+  useEffect(() => {
+    if (_toast?.msg) toast(_toast.msg);
+  }, [_toast]);
+
+  /* ── Jump to PO with highlight ── */
+  const handleJump = useCallback(
+    (v = "po", id) => {
+      setView(v);
+      if (v === "po" && id) {
+        setJumpTargetPO(id);
+      } else if (id) {
+        setTimeout(() => {
+          const el = document.getElementById("po-row-" + id);
+          if (el) {
+            el.scrollIntoView({ block: "center", behavior: "smooth" });
+            el.classList.add("row-hl");
+            setTimeout(() => el.classList.remove("row-hl"), 2500);
+          }
+        }, 300);
+      }
+    },
+    [setJumpTargetPO],
+  );
+
+  if (!_loaded) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950 gap-5">
+        <div className="flex items-center gap-3">
+          <div className="loading-spinner" />
+          <div>
+            <div className="text-white text-sm font-black tracking-wider">PO MANAGER</div>
+            <div className="text-slate-500 text-xs font-medium">v6.6</div>
+          </div>
+        </div>
+        <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden">
+          <div className="h-full bg-brand rounded-full loading-bar" />
+        </div>
+        <span className="text-slate-500 text-xs font-medium animate-pulse">Memuat data…</span>
+      </div>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <Layout view={view} setView={setView} onJump={handleJump}>
+        <Toast />
+        {view === "dashboard" && <Dashboard onJump={handleJump} />}
+        {view === "po"        && <POList />}
+        {view === "items"     && <AllItems onJump={handleJump} />}
+        {view === "supplier"  && <SupplierPage onJump={handleJump} />}
+        {view === "margin"    && <MarginAnalysis />}
+        {view === "ar-aging"  && <ARAgingReport onJump={handleJump} />}
+        {view === "settings"  && <Settings />}
+      </Layout>
+    </ErrorBoundary>
+  );
+}

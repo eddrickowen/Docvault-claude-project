@@ -23,7 +23,7 @@ const Toggle = ({ checked, onChange, label, hint }) => (
 );
 
 export function Settings() {
-  const { settings, companies, zoneTypes, hsDB, saveSettings, saveCompanies, saveZoneTypes, saveHsDB, toast } = usePOStore();
+  const { settings, companies, zoneTypes, hsDB, uom, saveSettings, saveCompanies, saveZoneTypes, saveHsDB, saveUom, toast } = usePOStore();
 
   const [activeTab, setActiveTab] = useState("general");
 
@@ -100,6 +100,55 @@ export function Settings() {
     reader.readAsText(file);
   };
 
+  const handleCompanyTSVImport = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target.result;
+        const lines = text.split(/\r?\n/).filter(line => line.trim());
+
+        // Parse TSV - first line is header
+        const headers = lines[0].split('\t').map(h => h.trim());
+        const nameIndex = headers.findIndex(h => h.toLowerCase().includes('name') || h.toLowerCase().includes('company') || h.toLowerCase().includes('perusahaan'));
+
+        if (nameIndex === -1) {
+          toast("✗ Tidak ditemukan kolom 'name' atau 'company' di file TSV");
+          e.target.value = "";
+          return;
+        }
+
+        const newCompanies = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cells = lines[i].split('\t');
+          const name = cells[nameIndex]?.trim();
+          if (name) {
+            newCompanies.push({ name });
+          }
+        }
+
+        if (newCompanies.length === 0) {
+          toast("✗ Tidak ada data company ditemukan di file TSV");
+          e.target.value = "";
+          return;
+        }
+
+        // Merge with existing companies (avoid duplicates)
+        const existingNames = new Set((cos || []).map(c => typeof c === 'object' ? c.name : c));
+        const uniqueNew = newCompanies.filter(c => !existingNames.has(c.name));
+
+        const merged = [...(cos || []), ...uniqueNew];
+        setCos(merged);
+        saveCompanies(merged);
+        toast(`✓ ${uniqueNew.length} perusahaan baru diimpor (${newCompanies.length - uniqueNew.length} duplikat diabaikan)`);
+      } catch (err) {
+        toast("✗ Error parsing TSV: " + err.message);
+      }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  };
+
   const tglField = (key) => setDoFields((p) => p.map((f) => f.key === key ? { ...f, enabled: !f.enabled } : f));
   const preview  = typeof formatDO === "function" ? formatDO(s.doFormat || "DO/{YYYY}/{NNN}", 42) : "";
 
@@ -113,8 +162,7 @@ export function Settings() {
   };
   const addUom = () => {
     if (newUom.trim()) {
-      const { uom, saveUom } = usePOStore.getState();
-      const n = [...uom, { v: newUom.toLowerCase().trim(), l: newUom.trim() }];
+      const n = [...(uom || []), { v: newUom.toLowerCase().trim(), l: newUom.trim() }];
       saveUom(n); setNewUom("");
     }
   };
@@ -178,6 +226,21 @@ export function Settings() {
                 <FGrid cols={2} className="gap-x-8 gap-y-5">
                   <FF label="Batas Hari Overdue" hint="Untuk PO Status Pending">
                     <NumInput value={s.overdueDays} onChange={(v) => setS((p) => ({ ...p, overdueDays: Math.max(1, v) }))} min={1} />
+                  </FF>
+                  <FF label="Fuzzy Search Threshold" hint="0.0 = Persis, 1.0 = Sangat Longgar (Pencarian)">
+                    <FSel value={s.fuzzyThreshold ?? 0.4} onChange={(v) => setS((p) => ({ ...p, fuzzyThreshold: v }))} options={[
+                      { v: 0, l: "0.0 (Exact Match)" },
+                      { v: 0.1, l: "0.1" },
+                      { v: 0.2, l: "0.2" },
+                      { v: 0.3, l: "0.3 (Strict)" },
+                      { v: 0.4, l: "0.4 (Recommended)" },
+                      { v: 0.5, l: "0.5" },
+                      { v: 0.6, l: "0.6 (Loose)" },
+                      { v: 0.7, l: "0.7" },
+                      { v: 0.8, l: "0.8" },
+                      { v: 0.9, l: "0.9" },
+                      { v: 1, l: "1.0 (Match Anything)" },
+                    ]} />
                   </FF>
                   <FF label="Default Rows (Pagination)" hint="Data per halaman">
                     <FSel value={s.paginationSize || 50} onChange={(v) => setS((p) => ({ ...p, paginationSize: v }))} options={[ {v: 50, l: "50 baris"}, {v: 100, l: "100 baris"}, {v: 500, l: "500 baris"}, {v: "All", l: "Semua (Tanpa batas)"} ]} />
@@ -264,6 +327,13 @@ export function Settings() {
           {activeTab === "lists" && (
             <div className="flex flex-col gap-5">
               <div className={cardCls}>
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-border-default">
+                  <div className="text-[14px] font-bold text-text-primary">Daftar Perusahaan</div>
+                  <label className="inline-flex items-center gap-1.5 rounded-md font-semibold cursor-pointer whitespace-nowrap select-none px-3 py-1.5 text-xs bg-brand text-white hover:bg-brand-dark transition-all">
+                    <Ico d={IC.import} size={11} /> Import TSV
+                    <input type="file" accept=".tsv,.txt" onChange={handleCompanyTSVImport} className="hidden" />
+                  </label>
+                </div>
                 <div className="flex flex-col gap-2 mb-4 max-h-[250px] overflow-y-auto pr-1">
                   <div className="mb-2">
                     <FIn value={coSearch} onChange={setCoSearch} placeholder="Cari perusahaan..." className="!py-1 !px-2 !text-xs" />
@@ -297,10 +367,9 @@ export function Settings() {
                   {(uom || []).filter(u => u.l.toLowerCase().includes(uomSearch.toLowerCase())).map((u, i) => (
                     <div key={i} className={listRowCls}>
                       <span className="flex-1 text-[13px] font-semibold text-text-primary">{u.l} ({u.v})</span>
-                      <Btn size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 hover:text-red transition-opacity" onClick={() => { 
-                        const old = usePOStore.getState().uom;
-                        const n = old.filter((_, j) => j !== i); 
-                        usePOStore.getState().saveUom(n);
+                      <Btn size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 hover:text-red transition-opacity" onClick={() => {
+                        const n = (uom || []).filter((_, j) => j !== i);
+                        saveUom(n);
                       }}>
                         <Ico d={IC.trash} size={12} />
                       </Btn>

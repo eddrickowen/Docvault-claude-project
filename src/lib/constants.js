@@ -57,6 +57,7 @@ export const DEFAULT_EXCEL_PO_COLS = [
 
 export const INIT_SETTINGS = {
   overdueDays: 7,
+  fuzzyThreshold: 0.4,
   doFormat: "DO/{YYYY}/{NNN}",
   doFields: DEFAULT_DO_FIELDS,
   excelItemCols: DEFAULT_EXCEL_ITEM_COLS,

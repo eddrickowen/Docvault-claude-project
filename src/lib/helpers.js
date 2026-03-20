@@ -2,7 +2,15 @@ import { PPN_RATE, CSV_PO_ST, CSV_IT_ST } from "./constants";
 import { usePOStore } from "../store/usePOStore";
 
 /* ── ID & Date ── */
-export const uid = () => "x" + Math.random().toString(36).slice(2, 9);
+export const uid = () => {
+  // Use crypto.randomUUID() for better collision resistance
+  // Fallback to timestamp + random for older browsers
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback: timestamp + random (36-char base)
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 11);
+};
 export const today = () => new Date().toISOString().slice(0, 10);
 export const diffDays = (d) => (d ? Math.floor((Date.now() - new Date(d)) / 864e5) : -1);
 
@@ -189,8 +197,14 @@ export const fmtPct = (v, t) => (t && t !== 0 ? `${((v / t) * 100).toFixed(1)}%`
 /* ── Item Calculations ── */
 export const itemNet = (i) => Math.max(0, (Number(i.unitPrice) || 0) * (Number(i.qty) || 0) - (Number(i.discount) || 0));
 export const itemBuy = (i) => {
-  const m = (i.supplierAssignments || []).find((a) => a.role === "main");
-  return m ? (m.pricePerUnit || 0) * (Number(i.qty) || 0) + (m.shippingTotal || 0) : 0;
+  const assigns = i.supplierAssignments || [];
+  if (!assigns.length) return 0;
+  // Prefer "main" supplier, fallback to the first one available
+  const m = assigns.find((a) => a.role === "main") || assigns[0];
+  const unitP = Number(m.pricePerUnit) || 0;
+  const qty   = Number(i.qty) || 0;
+  const ship  = Number(m.shippingTotal) || 0;
+  return unitP * qty + ship;
 };
 export const itemMargin = (i) => { const b = itemBuy(i); return b > 0 ? itemNet(i) - b : null; };
 

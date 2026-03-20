@@ -47,10 +47,10 @@ export function MarginAnalysis() {
         const mDate = new Date(d + "-01");
         key = d === "–" ? "–" : `${d} – ${mDate.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}`;
       }
-      if (!m[key]) m[key] = { key, items: [], net: 0, buy: 0, margin: 0, noPrice: 0 };
+      if (!m[key]) m[key] = { key, items: [], net: 0, buy: 0, margin: 0, noPrice: 0, netWithMg: 0 };
       const n = itemNet(i); const b = itemBuy(i); const mg = itemMargin(i);
       m[key].items.push(i); m[key].net += n; m[key].buy += b;
-      if (mg !== null) m[key].margin += mg; else m[key].noPrice++;
+      if (mg !== null) { m[key].margin += mg; m[key].netWithMg += n; } else m[key].noPrice++;
     });
     const all = Object.values(m);
     all.sort((a, b) => {
@@ -58,8 +58,8 @@ export function MarginAnalysis() {
       if (sortCol === "key") { vA = a.key; vB = b.key; }
       else if (sortCol === "items") { vA = a.items.length; vB = b.items.length; }
       else if (sortCol === "pct") {
-        vA = a.net > 0 && a.buy > 0 ? (a.margin / a.net) : -Infinity;
-        vB = b.net > 0 && b.buy > 0 ? (b.margin / b.net) : -Infinity;
+        vA = a.netWithMg > 0 ? (a.margin / a.netWithMg) : -Infinity;
+        vB = b.netWithMg > 0 ? (b.margin / b.netWithMg) : -Infinity;
       } else { vA = a[sortCol]; vB = b[sortCol]; }
       
       const dir = sortDir === "asc" ? 1 : -1;
@@ -78,13 +78,14 @@ export function MarginAnalysis() {
   };
 
   const totNet = groups.reduce((s, g) => s + g.net, 0);
+  const totNetWithMg = groups.reduce((s, g) => s + g.netWithMg, 0);
   const totBuy = groups.reduce((s, g) => s + g.buy, 0);
   const totMg  = groups.reduce((s, g) => s + g.margin, 0);
 
   const getCopyData = () => ({
     headers: ["Kelompok", "Net Jual", "Total Beli", "Margin", "Margin %", "Items"],
     rows: groups.map((g) => {
-      const pct = g.net > 0 && g.buy > 0 ? (g.margin / g.net * 100).toFixed(1) + "%" : "–";
+      const pct = g.netWithMg > 0 ? (g.margin / g.netWithMg * 100).toFixed(1) + "%" : "–";
       return [g.key, g.net, g.buy, g.margin, pct, g.items.length];
     }),
   });
@@ -122,7 +123,7 @@ export function MarginAnalysis() {
           </thead>
           <tbody>
             {groups.map((g, i) => {
-              const pct     = g.net > 0 && g.buy > 0 ? g.margin / g.net * 100 : null;
+              const pct     = g.netWithMg > 0 ? g.margin / g.netWithMg * 100 : null;
               const rowBg   = i % 2 === 0 ? "bg-white hover:bg-brand-soft" : "bg-surface-alt hover:bg-brand-soft";
               const netCls  = "text-brand";
               const buyCls  = g.buy > 0 ? "text-orange" : "text-text-muted";
@@ -180,7 +181,7 @@ export function MarginAnalysis() {
               <td className={`${tdCls} text-right font-mono font-extrabold text-brand whitespace-nowrap`}>{fmt(totNet)}</td>
               <td className={`${tdCls} text-right font-mono font-bold text-orange whitespace-nowrap`}>{fmt(totBuy)}</td>
               <td className={`${tdCls} text-right font-mono font-extrabold whitespace-nowrap ${totMg >= 0 ? "text-green" : "text-red"}`}>{fmt(totMg)}</td>
-              <td className={`${tdCls} text-right font-extrabold text-text-primary`}>{totNet > 0 && totBuy > 0 ? `${(totMg / totNet * 100).toFixed(1)}%` : "–"}</td>
+              <td className={`${tdCls} text-right font-extrabold text-text-primary`}>{totNetWithMg > 0 ? `${(totMg / totNetWithMg * 100).toFixed(1)}%` : "–"}</td>
               <td className={`${tdCls} text-center font-bold`}>{items.length}</td>
               <td className={tdCls} />
             </tr>

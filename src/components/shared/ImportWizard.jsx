@@ -74,9 +74,9 @@ export function ImportWizard({ rawText, fileExt, onConfirm, onCancel }) {
         tryMatch("qty",       ["qty", "quantity", "jumlah"]);
         tryMatch("unitPrice", ["unit price", "price", "harga"]);
         tryMatch("quoteRef",  ["quote ref", "no quotation"]);
-        tryMatch("orderDate", ["order date", "tanggal"]);
+        tryMatch("orderDate", ["order date", "po date", "tanggal"]);
         tryMatch("poStatus",  ["status"]);
-        tryMatch("unit",      ["unit", "satuan"]);
+        tryMatch("unit",      ["unit", "satuan", "uom"]);
         tryMatch("discount",  ["discount", "disc"]);
         tryMatch("discountPct",["disc%"]);
         tryMatch("itemStatus",["item status", "status item"]);
@@ -121,8 +121,9 @@ export function ImportWizard({ rawText, fileExt, onConfirm, onCancel }) {
         mappedRow[mapKey] = row[csvHeaderKey] || "";
       });
 
-      // Simple validation for required fields on rows that are selected
-      if (!mappedRow.orderNo || !mappedRow.company || !mappedRow.itemName) return; 
+      // Relax validation here to allow inheritance/fill-down in the parent component.
+      // We only skip rows that are completely empty or clearly invalid.
+      if (!mappedRow.orderNo && !mappedRow.itemName) return; 
       
       finalData.push(mappedRow);
     });

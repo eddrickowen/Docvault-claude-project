@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { Ico, IC, Btn } from "./ui";
 import { usePOStore } from "../store/usePOStore";
 import { VENDOR_NAME } from "../lib/constants";
+import { pb } from "../lib/pocketbase";
 import { isIncompletePO, isOverdue, today } from "../lib/helpers";
 
 const NAV = [
@@ -14,6 +15,7 @@ const NAV = [
   { id: "items",     label: "Semua Item",        icon: IC.box   },
   { id: "supplier",  label: "Supplier",          icon: IC.users },
   { id: "margin",    label: "Margin Analysis",   icon: IC.stats },
+  { id: "ar-aging",  label: "AR Aging Report",   icon: IC.trend },
   { id: "settings",  label: "Settings",          icon: IC.cog   },
 ];
 
@@ -21,11 +23,13 @@ const NAV = [
 const navActiveBtn = "flex items-center gap-2 w-full px-2 py-1.5 rounded border-none text-[13px] font-bold transition-all duration-120 mb-0.5 whitespace-nowrap overflow-hidden bg-blue-900 text-white";
 const navIdleBtn  = "flex items-center gap-2 w-full px-2 py-1.5 rounded border-none text-[13px] font-medium transition-all duration-120 mb-0.5 whitespace-nowrap overflow-hidden bg-transparent text-slate-400 hover:bg-slate-800";
 
-export function Layout({ view, setView, onJump, children }) {
+export function Layout({ view, setView, onJump, onLogout, children }) {
   const { pos, items, suppliers } = usePOStore();
   const [sideCollapsed, setSideCollapsed] = useState(false);
   const [hideAlert,    setHideAlert]    = useState(false);
   const [hideIncAlert, setHideIncAlert] = useState(false);
+  const [sharing, setSharing] = useState({ active: false, url: "" });
+  const [isToggling, setIsToggling] = useState(false);
 
   const todayStr    = today();
   const overduePOs  = pos.filter((p) => {
@@ -43,6 +47,21 @@ export function Layout({ view, setView, onJump, children }) {
     const h = (e) => {
       const tag = document.activeElement?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      // Undo: Ctrl+Z or Cmd+Z
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        usePOStore.getState().undo();
+        return;
+      }
+
+      // Redo: Ctrl+Y or Cmd+Shift+Z
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.shiftKey && e.key === "z"))) {
+        e.preventDefault();
+        usePOStore.getState().redo();
+        return;
+      }
+
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         setView("po");
@@ -61,6 +80,49 @@ export function Layout({ view, setView, onJump, children }) {
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [setView]);
+
+  /* ── Sharing Status Polling ── */
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await fetch("http://localhost:4041/api/sharing/status").then(r => r.json());
+        setSharing(res);
+      } catch (e) {
+        // Fallback to old behavior or silent fail
+      }
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleToggleSharing = async () => {
+    if (isToggling) return;
+    console.log("Toggle sharing clicked! Current active:", sharing.active);
+    setIsToggling(true);
+    try {
+      const url = "http://localhost:4041/api/sharing/toggle?active=" + !sharing.active;
+      console.log("Sending request to helper:", url);
+      await fetch(url);
+      
+      // Small delay to let ngrok start/stop
+      setTimeout(async () => {
+        try {
+          const res = await fetch("http://localhost:4041/api/sharing/status").then(r => r.json());
+          console.log("New status after toggle:", res);
+          setSharing(res);
+        } catch (statusErr) {
+          console.error("Failed to fetch final status:", statusErr);
+        } finally {
+          setIsToggling(false);
+        }
+      }, 3000);
+    } catch (e) {
+      alert("Sharing Toggle Error: " + e.message);
+      console.error("Failed to toggle sharing:", e);
+      setIsToggling(false);
+    }
+  };
 
   const sideWidth = sideCollapsed ? 44 : 176;
 
@@ -178,6 +240,40 @@ export function Layout({ view, setView, onJump, children }) {
             })}
           </nav>
 
+          {/* Sharing Toggle */}
+          {!sideCollapsed && (
+            <div className="px-2.5 py-2 border-t border-slate-800 bg-slate-900/30 shrink-0">
+              <div className="flex items-center justify-between gap-2 mb-1.5 px-0.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Public Sharing</span>
+                <button
+                  onClick={handleToggleSharing}
+                  disabled={isToggling}
+                  className={`w-7 h-3.5 rounded-full transition-all duration-200 relative ${sharing.active ? 'bg-emerald-600' : 'bg-slate-700'} ${isToggling ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow-sm transition-all ${sharing.active ? 'left-4' : 'left-0.5'}`} />
+                </button>
+              </div>
+              {sharing.active && sharing.url && (
+                <div 
+                  className="text-[10px] text-emerald-400 font-mono break-all cursor-pointer hover:text-emerald-300 bg-emerald-950/30 p-1 rounded border border-emerald-900/30 mb-1.5" 
+                  onClick={() => window.open(sharing.url, "_blank")}
+                  title="Click to open public link"
+                >
+                  {sharing.url.replace('https://', '')}
+                </div>
+              )}
+              {/* CMS Link */}
+              <div 
+                className="text-[10px] text-slate-500 font-bold uppercase tracking-wider cursor-pointer hover:text-slate-300 transition-colors flex items-center gap-1.5 px-0.5"
+                onClick={() => window.open("http://localhost:8090/_/", "_blank")}
+                title="Open PocketBase Admin"
+              >
+                <Ico d={IC.cog} size={10} />
+                Database CMS
+              </div>
+            </div>
+          )}
+
           {/* Stats footer */}
           {!sideCollapsed && (
             <div className="px-2.5 py-1.5 border-t border-slate-700 shrink-0">
@@ -204,6 +300,18 @@ export function Layout({ view, setView, onJump, children }) {
                 weekday: "long", day: "numeric", month: "long", year: "numeric",
               })}
             </span>
+            {onLogout && (
+              <Btn
+                size="sm"
+                variant="ghost"
+                onClick={onLogout}
+                title="Logout"
+                className="!text-text-secondary hover:!text-red hover:!bg-red-soft"
+              >
+                <Ico d={IC.close} size={12} />
+                Logout
+              </Btn>
+            )}
           </div>
 
           {/* Page content */}

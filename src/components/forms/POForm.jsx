@@ -36,7 +36,7 @@ export function POForm({ initial, companies, items, suppliers, dos, zoneTypes, s
 
   const handleSave = () => {
     if (!f.company.trim() || !f.orderDate) return;
-    const newId = f.id || ("po" + uid());
+    const newId = f.id || uid();
     // Ensure all draft items carry the final PO id
     const finalItems = draftItems.map((i) => ({ ...i, poId: newId }));
     onSave({ ...f, id: newId }, finalItems);

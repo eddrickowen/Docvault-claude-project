@@ -96,15 +96,19 @@ function MonthSparkline({ pos, selYear, selMonth, setSelMonth }) {
  */
 export function Dashboard({ onJump }) {
   const { pos, items, dos, settings } = usePOStore();
-  const [selMonth, setSelMonth] = useState(-1); // -1 = All
-  const [selYear, setSelYear] = useState(new Date().getFullYear());
+  const years = useMemo(() => [...new Set(pos.map(p => new Date(p.orderDate).getFullYear()))].sort((a,b) => b-a), [pos]);
+  const companies = useMemo(() => [...new Set(pos.map(p => p.company))].sort(), [pos]);
+  
+  const [selMonth, setSelMonth] = useState(-1);
+  const [selYear, setSelYear] = useState(() => {
+    const cur = new Date().getFullYear();
+    if (pos.some(p => new Date(p.orderDate).getFullYear() === cur)) return cur;
+    return -1; // Default to 'Semua Tahun' if no data for current year
+  });
   const [selCompany, setSelCompany] = useState("all");
   const [overdueThreshold, setOverdueThreshold] = useState(settings.overdueDays || 7);
-  const [detailSource, setDetailSource] = useState(null); // { type, label, data }
+  const [detailSource, setDetailSource] = useState(null);
   const [drillSearch, setDrillSearch] = useState("");
-
-  const companies = useMemo(() => [...new Set(pos.map(p => p.company))].sort(), [pos]);
-  const years = useMemo(() => [...new Set(pos.map(p => new Date(p.orderDate).getFullYear()))].sort((a,b) => b-a), [pos]);
 
   const filteredData = useMemo(() => {
     let fPos = [...pos];
@@ -119,12 +123,21 @@ export function Dashboard({ onJump }) {
 
   const { fPos, fItems, fDos } = filteredData;
 
+  // Pre-compute PO totals Map for performance (avoid recalculating in multiple places)
+  const poTotalsMap = useMemo(() => {
+    const map = new Map();
+    fPos.forEach((p) => {
+      map.set(p.id, calcPOTotals(p, items));
+    });
+    return map;
+  }, [fPos, items]);
+
   const overduePOs    = fPos.filter((p) => isOverdue(p, overdueThreshold));
   const urgentPOs     = fPos.filter((p) => p.priority === "urgent" && !["paid", "cancelled"].includes(p.status));
   const incompletePOs = fPos.filter((p) => isIncompletePO(p));
-  
+
   const { totalRev, totalExPPN } = fPos.reduce((acc, p) => {
-    const { total, exPPN } = calcPOTotals(p, items);
+    const { total, exPPN } = poTotalsMap.get(p.id);
     acc.totalRev += total;
     acc.totalExPPN += exPPN;
     return acc;
@@ -154,19 +167,19 @@ export function Dashboard({ onJump }) {
 
   const byCoAll = useMemo(() => {
     const m = {};
-    fPos.forEach((p) => { const t = calcPOTotals(p, items).total; m[p.company] = (m[p.company] || 0) + t; });
+    fPos.forEach((p) => { const t = poTotalsMap.get(p.id).total; m[p.company] = (m[p.company] || 0) + t; });
     return Object.entries(m).sort((a, b) => b[1] - a[1]);
-  }, [fPos, items]);
+  }, [fPos, poTotalsMap]);
   const byCo = showAllCo ? byCoAll : byCoAll.slice(0, 3);
 
   const byStatusAll = useMemo(() => {
     const stats = Object.entries(INIT_PO_STATUS).map(([k, v]) => {
       const filteredForStatus = fPos.filter((p) => p.status === k);
-      const rev = filteredForStatus.reduce((s, p) => s + calcPOTotals(p, items).total, 0);
+      const rev = filteredForStatus.reduce((s, p) => s + poTotalsMap.get(p.id).total, 0);
       return { k, label: v.label, count: filteredForStatus.length, revenue: rev, color: v.color, raw: filteredForStatus };
     });
     return stats.filter((x) => x.count > 0 || x.revenue > 0);
-  }, [fPos, items]);
+  }, [fPos, poTotalsMap]);
   const byStatus = showAllStatus ? byStatusAll : byStatusAll.slice(0, 3);
 
   const maxCo = byCoAll.length ? byCoAll[0][1] : 1;
@@ -342,8 +355,27 @@ export function Dashboard({ onJump }) {
           <div className="p-3 border-b border-border-default flex justify-between items-center bg-brand/5 rounded-t-xl gap-4">
             <div className="flex items-center gap-2 min-w-fit">
               <div className="w-2 h-4 bg-brand rounded-full"></div>
-              <h3 className="text-sm font-bold text-text-primary uppercase tracking-tight">Detail: {detailSource.label} ({detailSource.data.length})</h3>
+              <h3 className="text-sm font-bold text-text-primary uppercase tracking-tight">
+                Detail: {detailSource.label} 
+                <span className="ml-2 text-[10px] bg-brand text-white px-1.5 py-0.5 rounded-full">{drillFiltered.length}</span>
+              </h3>
             </div>
+            
+            {/* Optional Total Summary for Revenue/Margin */}
+            {(detailSource.type === "revenue" || detailSource.type === "margin" || detailSource.type?.startsWith("status-") || detailSource.type?.startsWith("co-")) && (
+              <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white border border-brand/20 rounded-lg shadow-sm">
+                <span className="text-[10px] font-bold text-text-muted uppercase">Total:</span>
+                <span className="text-[12px] font-extrabold text-brand font-mono">
+                  {fmt(drillFiltered.reduce((acc, p) => {
+                    const po = p.orderNo ? p : pos.find(x => x.id === (p.poId || p.id));
+                    if (!po) return acc;
+                    if (detailSource.type === "margin") return acc + (itemMargin(p) || 0);
+                    const totals = poTotalsMap.get(po.id) || calcPOTotals(po, items);
+                    return acc + totals.total;
+                  }, 0))}
+                </span>
+              </div>
+            )}
             
             <div className="flex-1 max-w-[400px] relative">
               <Ico d={IC.search} size={12} color="var(--color-text-muted)" className="absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -359,82 +391,89 @@ export function Dashboard({ onJump }) {
                <Ico d={IC.close} size={14} color="var(--color-text-muted)" />
             </button>
           </div>
-          <div className="max-h-[300px] overflow-y-auto custom-scroll">
+          <div className="max-h-[400px] overflow-y-auto custom-scroll relative bg-white rounded-b-xl border-t border-border-default">
             <table className="w-full text-left border-collapse">
-              <thead className="sticky top-0 bg-surface shadow-sm text-[10px] font-bold text-text-muted uppercase z-[5]">
+              <thead className="sticky top-0 bg-surface-alt shadow-[0_2px_5px_-2px_rgba(0,0,0,0.1)] text-[11px] font-bold text-text-secondary uppercase z-[5]">
                 <tr>
                   {detailSource.type === "surat-jalan" ? (
                     <>
-                      <th className="px-4 py-2 border-b">No. DO</th>
-                      <th className="px-4 py-2 border-b">No. PO</th>
-                      <th className="px-4 py-2 border-b">Customer</th>
-                      <th className="px-4 py-2 border-b">Tgl Kirim</th>
-                      <th className="px-4 py-2 border-b text-center">Items</th>
+                      <th className="px-5 py-3.5 border-b border-border-default">No. DO</th>
+                      <th className="px-5 py-3.5 border-b border-border-default">No. PO</th>
+                      <th className="px-5 py-3.5 border-b border-border-default">Customer</th>
+                      <th className="px-5 py-3.5 border-b border-border-default">Tgl Kirim</th>
+                      <th className="px-5 py-3.5 border-b border-border-default text-center">Items</th>
                     </>
                   ) : detailSource.type === "margin" ? (
                     <>
-                      <th className="px-4 py-2 border-b">Item Name</th>
-                      <th className="px-4 py-2 border-b">PO No</th>
-                      <th className="px-4 py-2 border-b text-right">Qty</th>
-                      <th className="px-4 py-2 border-b text-right">Net</th>
-                      <th className="px-4 py-2 border-b text-right">Margin</th>
+                      <th className="px-5 py-3.5 border-b border-border-default">Item Name</th>
+                      <th className="px-5 py-3.5 border-b border-border-default">PO No</th>
+                      <th className="px-5 py-3.5 border-b border-border-default text-right">Qty</th>
+                      <th className="px-5 py-3.5 border-b border-border-default text-right">Net</th>
+                      <th className="px-5 py-3.5 border-b border-border-default text-right">Margin</th>
                     </>
                   ) : (
                     <>
-                      <th className="px-4 py-2 border-b">No. Order</th>
-                      <th className="px-4 py-2 border-b">Perusahaan</th>
-                      <th className="px-4 py-2 border-b">Tanggal</th>
-                      <th className="px-4 py-2 border-b text-right">Total</th>
-                      <th className="px-4 py-2 border-b text-center">Status</th>
+                      <th className="px-5 py-3.5 border-b border-border-default">No. Order</th>
+                      <th className="px-5 py-3.5 border-b border-border-default">Perusahaan</th>
+                      <th className="px-5 py-3.5 border-b border-border-default">Tanggal</th>
+                      <th className="px-5 py-3.5 border-b border-border-default text-right">Total</th>
+                      <th className="px-5 py-3.5 border-b border-border-default text-center">Status</th>
                     </>
                   )}
                 </tr>
               </thead>
-              <tbody className="text-[11px]">
+              <tbody className="text-[12px]">
                 {drillFiltered.map((p, idx) => {
                   if (detailSource.type === "surat-jalan") {
-                    const d = p; // p is a DO object here
+                    const d = p;
                     const po = pos.find(x => x.id === d.poId);
                     return (
-                      <tr key={d.id + idx} className="hover:bg-brand-soft cursor-pointer transition-colors border-b border-border-default/50 group" onClick={() => onJump("po", d.poId)}>
-                        <td className="px-4 py-2 font-bold text-brand">{d.doNo}</td>
-                        <td className="px-4 py-2 font-mono">{po?.orderNo || "–"}</td>
-                        <td className="px-4 py-2 text-text-secondary truncate max-w-[150px]">{po?.company || "–"}</td>
-                        <td className="px-4 py-2 text-text-muted">{d.deliveryDate}</td>
-                        <td className="px-4 py-2 text-center font-bold text-text-secondary">{d.lines?.length || 0}</td>
+                      <tr key={d.id + idx} className="hover:bg-brand-soft/50 cursor-pointer transition-all border-b border-border-default/40 group active:bg-brand-soft" onClick={() => onJump("po", d.poId)}>
+                        <td className="px-5 py-3 font-bold text-brand group-hover:underline">{d.doNo}</td>
+                        <td className="px-5 py-3 font-mono text-text-secondary">{po?.orderNo || "–"}</td>
+                        <td className="px-5 py-3 text-text-secondary font-medium truncate max-w-[200px]">{po?.company || "–"}</td>
+                        <td className="px-5 py-3 text-text-muted font-mono">{d.deliveryDate}</td>
+                        <td className="px-5 py-3 text-center">
+                           <span className="bg-surface-alt border border-border-default px-2 py-0.5 rounded text-[10px] font-bold text-text-secondary group-hover:bg-brand group-hover:text-white transition-colors">{d.lines?.length || 0}</span>
+                        </td>
                       </tr>
                     );
                   }
                   if (detailSource.type === "margin") {
-                    const item = p; // p is an item object here
+                    const item = p;
                     const po = pos.find(x => x.id === item.poId);
                     const mg = itemMargin(item);
                     return (
-                      <tr key={item.id + idx} className="hover:bg-brand-soft cursor-pointer transition-colors border-b border-border-default/50 group" onClick={() => onJump("po", item.poId)}>
-                        <td className="px-4 py-2 font-bold text-text-primary group-hover:text-brand transition-colors">{item.itemName}</td>
-                        <td className="px-4 py-2 font-mono text-brand">{po?.orderNo || "–"}</td>
-                        <td className="px-4 py-2 text-right font-mono">{item.qty} {item.unit}</td>
-                        <td className="px-4 py-2 text-right font-bold font-mono">{fmt(itemNet(item))}</td>
-                        <td className={`px-4 py-2 text-right font-bold font-mono ${mg >= 0 ? "text-green" : "text-red"}`}>{fmt(mg)}</td>
+                      <tr key={item.id + idx} className="hover:bg-brand-soft/50 cursor-pointer transition-all border-b border-border-default/40 group active:bg-brand-soft" onClick={() => onJump("po", item.poId)}>
+                        <td className="px-5 py-3 font-bold text-text-primary group-hover:text-brand transition-colors">{item.itemName}</td>
+                        <td className="px-5 py-3 font-mono text-brand font-semibold">{po?.orderNo || "–"}</td>
+                        <td className="px-5 py-3 text-right font-mono text-text-secondary">{item.qty} {item.unit}</td>
+                        <td className="px-5 py-3 text-right font-bold font-mono text-text-primary">{fmt(itemNet(item))}</td>
+                        <td className={`px-5 py-3 text-right font-bold font-mono ${mg >= 0 ? "text-green" : "text-red"}`}>
+                           <div className="flex items-center justify-end gap-1">
+                             {mg < 0 && <Ico d={IC.warn} size={11} />}
+                             {fmt(mg)}
+                           </div>
+                        </td>
                       </tr>
                     );
                   }
 
                   const po = p.orderNo ? p : pos.find(x => x.id === (p.poId || p.id));
                   if (!po) return null;
-                  const totals = calcPOTotals(po, items);
+                  const totals = poTotalsMap.get(po.id) || calcPOTotals(po, items);
                   return (
                     <tr 
                       key={po.id + idx} 
-                      className="hover:bg-brand-soft cursor-pointer transition-colors border-b border-border-default/50 group"
+                      className="hover:bg-brand-soft/50 cursor-pointer transition-all border-b border-border-default/40 group active:bg-brand-soft"
                       onClick={() => onJump("po", po.id)}
                     >
-                      <td className="px-4 py-2 font-bold text-text-primary group-hover:text-brand transition-colors">{po.orderNo}</td>
-                      <td className="px-4 py-2 text-text-secondary truncate max-w-[150px]" title={po.company}>{po.company}</td>
-                      <td className="px-4 py-2 text-text-muted font-mono">{po.orderDate}</td>
-                      <td className="px-4 py-2 text-right font-bold text-text-primary font-mono">{fmt(totals.total)}</td>
-                      <td className="px-4 py-2 text-center">
-                        <div className="scale-75 origin-center inline-block">
+                      <td className="px-5 py-3 font-bold text-text-primary group-hover:text-brand transition-colors font-mono">{po.orderNo}</td>
+                      <td className="px-5 py-3 text-text-secondary font-medium truncate max-w-[250px]" title={po.company}>{po.company}</td>
+                      <td className="px-5 py-3 text-text-muted font-mono">{po.orderDate}</td>
+                      <td className="px-5 py-3 text-right font-bold text-brand font-mono text-[13px]">{fmt(totals.total)}</td>
+                      <td className="px-5 py-3 text-center">
+                        <div className="scale-90 origin-center inline-block">
                           <SBadge status={po.status} cfg={INIT_PO_STATUS} />
                         </div>
                       </td>

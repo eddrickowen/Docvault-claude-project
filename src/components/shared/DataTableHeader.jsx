@@ -71,7 +71,7 @@ export function DataTableHeader({
           </th>
         ))}
         {hasActions && (
-          <th className={`${thCls} w-[76px] sticky top-0 right-0 bg-surface z-[12] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]`}>Aksi</th>
+          <th className={`${thCls} w-[120px] sticky top-0 right-0 bg-surface z-[12] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]`}>Actions</th>
         )}
       </tr>
     </thead>
