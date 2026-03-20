@@ -1,9 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(del \"c:\\Users\\Eddri\\Music\\docvault\\src\\App.jsx.backup\" \"c:\\Users\\Eddri\\Music\\docvault\\src\\store\\usePOStore.js.backup\" \"c:\\Users\\Eddri\\Music\\docvault\\src\\pages\\POList.jsx.editbackup\" \"c:\\Users\\Eddri\\Music\\docvault\\src\\App.pocketbase.jsx\")",
-      "Bash(sort -t: -k2 -rn)",
-      "Bash(npm run lint)"
+      "Bash(del \"c:\\Users\\Eddri\\Music\\docvault\\src\\components\\ErrorBoundary.jsx\")"
     ],
     "deny": [],
     "ask": []

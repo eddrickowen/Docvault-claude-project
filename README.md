@@ -1,16 +1,23 @@
-# React + Vite
+# DocVault 📦
+
+A high-performance Document Management System for Purchase Orders and Delivery Orders.
+
+## 📂 Project Documentation
+
+If you are a developer or an AI assistant, please refer to the following guides in the `documentation/` folder:
+
+- **[SHARING_SYSTEM.md](./documentation/SHARING_SYSTEM.md)**: Details on the Node.js sharing helper and ngrok integration.
+- **[BULK_OPERATIONS.md](./documentation/BULK_OPERATIONS.md)**: Optimization guide for high-speed bulk deletions and SQL patterns.
+- **[FINAL_SIMPLE_STEPS.md](./documentation/FINAL_SIMPLE_STEPS.md)**: Manual setup and migration guide.
+
+## 🚀 Getting Started
+
+1.  **Backend**: Run `C:\pocketbase\pocketbase.exe serve`.
+2.  **Frontend**: Run `npm run dev`.
+3.  **App Mode**: Simply run `DocVault.vbs` to launch everything silently.
+
+---
+
+### React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.

@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import { pb, collections, dbHelpers, cleanRecord } from "../lib/pocketbase";
 import { logger } from "../lib/logger";
+import { batchDelete, batchCreate } from "../lib/batchHelpers";
 import {
   INIT_POS, INIT_ITEMS, INIT_SUPPLIERS, INIT_DOS,
   INIT_COMPANIES, INIT_ZONE_TYPES, INIT_SETTINGS, INIT_HS_DB, UOM_OPTIONS,
@@ -101,40 +102,44 @@ export const usePOStore = create((set, get) => ({
     try {
       logger.log('🔄 Loading data from PocketBase...');
 
-      // Load all data with step-by-step logging
-      const pos = await dbHelpers.getAll('pos');
-      logger.log(`📦 POs [${pos.length}]`);
-      
-      const items = await dbHelpers.getAll('items');
-      logger.log(`📦 Items [${items.length}]`);
-      
-      const suppliers = await dbHelpers.getAll('suppliers');
-      const dos       = await dbHelpers.getAll('dos');
-      const companies = await dbHelpers.getAll('companies');
-      const zoneTypes = await dbHelpers.getAll('zone_types');
-      const hsDB      = await dbHelpers.getAll('hs_codes');
+      // Load all collections in parallel for faster initial load
+      const [
+        pos,
+        items,
+        suppliers,
+        dos,
+        companies,
+        zoneTypes,
+        hsDB,
+        settingsResult,
+        uomResult
+      ] = await Promise.all([
+        dbHelpers.getAll('pos'),
+        dbHelpers.getAll('items'),
+        dbHelpers.getAll('suppliers'),
+        dbHelpers.getAll('dos'),
+        dbHelpers.getAll('companies'),
+        dbHelpers.getAll('zone_types'),
+        dbHelpers.getAll('hs_codes'),
+        // Load settings (special handling - single record)
+        collections.settings().getFullList().catch(() => []),
+        // Load UOM
+        collections.settings().getFirstListItem('key="uom"').catch(() => null)
+      ]);
 
-      // Load settings (special handling - single record)
+      logger.log('📦 Data loaded:', { pos: pos.length, items: items.length, suppliers: suppliers.length });
+
+      // Process settings
       let settings = INIT_SETTINGS;
-      try {
-        const settingsRecords = await collections.settings().getFullList();
-        if (settingsRecords.length > 0) {
-          const sObj = settingsRecords.find(r => r.key === 'app_settings');
-          settings = sObj?.value || INIT_SETTINGS;
-        }
-      } catch (e) {
-        logger.warn('Settings not found, using defaults');
+      if (settingsResult.length > 0) {
+        const sObj = settingsResult.find(r => r.key === 'app_settings');
+        settings = sObj?.value || INIT_SETTINGS;
       }
 
-      // Load UOM
+      // Process UOM
       let uom = UOM_OPTIONS;
-      try {
-        const uomRecords = await collections.settings().getFirstListItem('key="uom"');
-        if (uomRecords) {
-          uom = uomRecords.value || UOM_OPTIONS;
-        }
-      } catch (e) {
-        logger.warn('UOM not found, using defaults');
+      if (uomResult) {
+        uom = uomResult.value || UOM_OPTIONS;
       }
 
       logger.log('✅ Data loaded:', { pos: pos.length, items: items.length, suppliers: suppliers.length });
@@ -325,16 +330,48 @@ export const usePOStore = create((set, get) => ({
         ? await collections.pos().update(existing.id, cleanRecord({ ...po, id: existing.id }))
         : await collections.pos().create(cleanRecord(po));
 
-      // Save all items
+      // Save all items using batch operations for better performance
       const savedItems = [];
-      for (const item of draftItems) {
-        const itemToSave = { ...item, poId: savedPO.id };
-        const itemExisting = item.id && get().items.find(i => i.id === item.id);
-        
-        const savedItem = itemExisting
-          ? await collections.items().update(item.id, cleanRecord(itemToSave))
-          : await collections.items().create(cleanRecord(itemToSave));
-        savedItems.push(savedItem);
+      if (draftItems.length > 0) {
+        const itemsToCreate = [];
+        const itemsToUpdate = [];
+
+        for (const item of draftItems) {
+          const itemToSave = { ...item, poId: savedPO.id };
+          const itemExisting = item.id && get().items.find(i => i.id === item.id);
+
+          if (itemExisting) {
+            itemsToUpdate.push({ ...cleanRecord(itemToSave), id: item.id });
+          } else {
+            itemsToCreate.push(cleanRecord(itemToSave));
+          }
+        }
+
+        // Create new items in batch
+        if (itemsToCreate.length > 0) {
+          const createResult = await batchCreate(collections.items(), itemsToCreate, 30);
+          savedItems.push(...createResult.success);
+          if (createResult.failed.length > 0) {
+            logger.log(`⚠️ Failed to create ${createResult.failed.length} items`);
+          }
+        }
+
+        // Update existing items concurrently
+        if (itemsToUpdate.length > 0) {
+          const updatePromises = itemsToUpdate.map(item =>
+            collections.items().update(item.id, item)
+              .then(updated => ({ success: true, item: updated }))
+              .catch(error => ({ success: false, error, item }))
+          );
+          const updateResults = await Promise.all(updatePromises);
+          updateResults.forEach(result => {
+            if (result.success) {
+              savedItems.push(result.item);
+            } else {
+              logger.log(`⚠️ Failed to update item:`, result.error);
+            }
+          });
+        }
       }
 
       // Update local state (real-time will also update, but this is instant feedback)
@@ -372,20 +409,37 @@ export const usePOStore = create((set, get) => ({
       const po = get().pos.find(p => p.id === id);
       get()._saveToHistory(`Hapus PO: ${po?.orderNo || id}`);
 
-      // Delete from PocketBase
-      await collections.pos().delete(id);
-
-      // Items and DOs with cascade delete will be handled by PocketBase relations
-      // But we also delete them manually for immediate UI update
+      // Collect items and DOs to delete
       const itemsToDelete = get().items.filter(i => i.poId === id);
       const dosToDelete = get().dos.filter(d => d.poId === id);
 
-      await Promise.all([
-        ...itemsToDelete.map(i => collections.items().delete(i.id)),
-        ...dosToDelete.map(d => collections.dos().delete(d.id))
+      // Delete all related records concurrently with PO using batch operations
+      const [poResult, itemsResult, dosResult] = await Promise.all([
+        collections.pos().delete(id).then(() => ({ success: true })).catch(error => ({ success: false, error })),
+        itemsToDelete.length > 0
+          ? batchDelete(collections.items(), itemsToDelete.map(i => i.id), 30)
+          : Promise.resolve({ success: [], failed: [] }),
+        dosToDelete.length > 0
+          ? batchDelete(collections.dos(), dosToDelete.map(d => d.id), 30)
+          : Promise.resolve({ success: [], failed: [] })
       ]);
 
-      // Update local state
+      // Check for failures and throw error if PO deletion failed
+      if (!poResult.success) {
+        throw new Error(`Failed to delete PO: ${poResult.error.message}`);
+      }
+      if (itemsResult.failed.length > 0) {
+        logger.warn(`⚠️ Failed to delete ${itemsResult.failed.length} items`);
+        // Throw error to prevent silent failure
+        throw new Error(`Failed to delete ${itemsResult.failed.length} items`);
+      }
+      if (dosResult.failed.length > 0) {
+        logger.warn(`⚠️ Failed to delete ${dosResult.failed.length} DOs`);
+        // Throw error to prevent silent failure
+        throw new Error(`Failed to delete ${dosResult.failed.length} DOs`);
+      }
+
+      // Update local state only if deletion succeeded
       set((s) => ({
         pos: s.pos.filter(x => x.id !== id),
         items: s.items.filter(i => i.poId !== id),
@@ -395,6 +449,37 @@ export const usePOStore = create((set, get) => ({
     } catch (error) {
       console.error('Failed to delete PO:', error);
       get().toast('⚠️ Failed to delete PO: ' + error.message);
+      // Re-throw the error so bulk delete can handle it properly
+      throw error;
+    }
+  },
+
+  bulkDeletePOs: async (ids) => {
+    if (!ids || ids.length === 0) return;
+    try {
+      get()._saveToHistory(`Hapus ${ids.length} PO (Bulk)`);
+      
+      // Call the custom backend endpoint for efficient SQL deletion
+      const response = await pb.send("/api/bulk-delete", {
+        method: "POST",
+        body: { ids } // Let SDK handle stringify and headers
+      });
+
+      if (response.success) {
+        // Update local state instantly by filtering out the deleted IDs
+        const idSet = new Set(ids);
+        set((s) => ({
+          pos: s.pos.filter(p => !idSet.has(p.id)),
+          items: s.items.filter(i => !idSet.has(i.poId)),
+          dos: s.dos.filter(d => !idSet.has(d.poId))
+        }));
+        get().toast(`✓ ${ids.length} PO berhasil dihapus.`);
+      } else {
+        throw new Error(response.error || "Gagal menghapus PO");
+      }
+    } catch (error) {
+      console.error('Failed to bulk delete POs:', error);
+      get().toast('⚠️ Gagal menghapus PO secara massal: ' + error.message);
     }
   },
 

@@ -1,21 +1,19 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { Btn, Ico, IC, Modal, SPill, FIn, FSel } from "../components/ui";
-import { Pagination, DateRangeFilter, NumberRangeFilter, TextFilter, ColFilter, InlineCell, CopyTSVButton, ImportWizard, DataTableToolbar, DataTableHeader, ItemTableRow } from "../components/shared";
-import { ItemForm, POForm, DOGeneratorModal, DOPrintTemplate, SupplierFormModal, BulkEditModal } from "../components/forms";
+import { Pagination, DateRangeFilter, NumberRangeFilter, TextFilter, ColFilter, InlineCell, CopyTSVButton, ImportWizard, DataTableToolbar, DataTableHeader } from "../components/shared";
+import { POForm, DOGeneratorModal, SupplierFormModal } from "../components/forms";
+import { POExpandedRow } from "../components/po";
 import { useConfirm, useDataTable } from "../hooks";
 import { usePOStore } from "../store/usePOStore";
 import {
-  uid, today, diffDays, fmtDate, fmtShort, fmt, calcPOTotals, getPOProgress, getPOZone, getQtyDel,
+  uid, today, diffDays, fmtDate, fmtShort, calcPOTotals, getPOProgress, getPOZone,
   isOverdue, isIncompletePO, agingColor, agingBg,
   parseSmartDate, parseIDR, mapPOSt, mapItemSt,
-  exportCSV, copyTSV, applyDateFilter, applyNumFilter, applyTextFilter,
-  itemNet, itemMargin, itemBuy
+  exportCSV, copyTSV, applyDateFilter, applyNumFilter, applyTextFilter
 } from "../lib/helpers";
 import { fuzzySearchPOs } from "../lib/fuzzySearch";
-import { INIT_PO_STATUS, ITEM_STATUS, PAGE_SIZE, mkItem, VENDOR_NAME, DEFAULT_EXCEL_ITEM_COLS, DEFAULT_EXCEL_PO_COLS } from "../lib/constants";
+import { INIT_PO_STATUS, PAGE_SIZE, mkItem, DEFAULT_EXCEL_PO_COLS } from "../lib/constants";
 import { stickyL as tableStickyL, stickyR as tableStickyR } from "../lib/tableStyles";
-import { buildItemRowsByIds, getEnabledColumns } from "../lib/exportHelpers";
-import { mergeSupplierAssignments } from "../lib/supplierHelpers";
 import * as XLSX from 'xlsx';
 
 /* ── Class constants (page-specific overrides) ── */
@@ -23,329 +21,12 @@ const thCls   = "py-2 px-2 text-[11px] font-extrabold text-text-secondary text-l
 const tdCls   = "py-2 px-2 border-b border-border-default text-[12px] align-middle";
 const stickyL = tableStickyL;
 const stickyR = tableStickyR;
-const doThCls = "py-[5px] px-[10px] text-[9px] font-bold text-text-secondary text-left border-b border-border-default uppercase";
-
-/* ── DODetailPanel (internal) ── */
-function DODetailPanel({ dos, poId, po, items, onDeleteDO }) {
-  const poDos = (dos || []).filter((d) => d.poId === poId);
-  const [printDO, setPrintDO] = useState(null);
-
-  if (!poDos.length) return <span className="text-[11px] text-text-muted">Belum ada DO</span>;
-
-  return (
-    <>
-      {printDO && (
-        <>
-          <DOPrintTemplate
-            doData={printDO}
-            po={po}
-            items={items}
-            vendorName={VENDOR_NAME}
-          />
-          <Modal
-            open
-            onClose={() => setPrintDO(null)}
-            title={`Preview Surat Jalan ${printDO.doNo}`}
-            wide
-          >
-            <div className="text-[11px] text-text-muted mb-3">
-              Layout DO akan ikut tercetak ketika Anda membuka dialog print (Ctrl+P).
-            </div>
-            <div className="flex justify-end gap-2">
-              <Btn variant="secondary" onClick={() => setPrintDO(null)}>
-                Tutup Preview
-              </Btn>
-              <Btn
-                variant="blue"
-                onClick={() => {
-                  window.print();
-                }}
-              >
-                <Ico d={IC.print} size={12} /> Buka Dialog Print
-              </Btn>
-            </div>
-          </Modal>
-        </>
-      )}
-      <div className="flex flex-col gap-1.5">
-        {poDos.map((d) => {
-          const driver = d.fieldValues?.driverName;
-          const plate  = d.fieldValues?.vehiclePlate;
-          return (
-            <div key={d.id} className="bg-surface border border-border-default rounded-[7px] overflow-hidden">
-              <div className="flex items-center gap-2.5 py-2 px-3 bg-brand-soft border-b border-brand-mid">
-                <Ico d={IC.truck} size={13} color="var(--color-brand)" />
-                <span className="font-mono font-bold text-xs text-brand">{d.doNo}</span>
-                <span className="text-[10px] text-text-secondary">Dibuat: {fmtDate(d.createdAt)}</span>
-                {d.deliveryDate && d.deliveryDate !== d.createdAt && (
-                  <span className="text-[10px] text-text-secondary">· Kirim: {fmtDate(d.deliveryDate)}</span>
-                )}
-                {driver && (
-                  <span className="text-[10px] text-text-muted">🚗 {driver}{plate ? ` · ${plate}` : ""}</span>
-                )}
-                <div className="ml-auto flex gap-1.5">
-                  <Btn size="sm" variant="blue" onClick={() => setPrintDO(d)}>
-                    <Ico d={IC.print} size={10} /> Cetak
-                  </Btn>
-                  {onDeleteDO && (
-                    <Btn size="sm" variant="danger" onClick={() => onDeleteDO(d.id)}>
-                      <Ico d={IC.trash} size={10} /> Hapus
-                    </Btn>
-                  )}
-                </div>
-              </div>
-              <table className="w-full border-collapse min-w-[800px]">
-                <thead>
-                  <tr className="bg-surface-alt">
-                    {["Item", "Qty Kirim", "HS Code", "Catatan"].map((h) => (
-                      <th key={h} className={doThCls}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(d.lines || []).map((line) => {
-                    const item = items.find((i) => i.id === line.itemId);
-                    return (
-                      <tr key={line.itemId} className="border-b border-border-default">
-                        <td className="py-1.5 px-[10px] text-[11px] font-semibold truncate max-w-[180px] hover:overflow-visible hover:whitespace-normal" title={item?.itemName || line.itemId}>{item?.itemName || line.itemId}</td>
-                        <td className="py-1.5 px-[10px] text-[11px] font-mono font-bold text-brand">{line.qtyDelivered} {item?.unit || ""}</td>
-                        <td className="py-1.5 px-[10px] text-[10px] font-mono text-text-secondary">{line.hsCode || "–"}</td>
-                        <td className="py-1.5 px-[10px] text-[10px] text-text-muted truncate max-w-[120px] hover:overflow-visible hover:whitespace-normal" title={line.notes || ""}>{line.notes || "–"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-/* ── ExpandedRow (internal) ── */
-function ExpandedRow({ po, items, suppliers, dos, zoneTypes, settings, hsDB = [], onUpdateItem, onAddItem, onOpenDO, onAddSupplier, onConfirmDelete, onDeleteDO }) {
-  const { toast } = usePOStore();
-  const poItems = items.filter((i) => i.poId === po.id);
-  const [showAdd,   setShowAdd]   = useState(false);
-  const [showSupForm, setShowSupForm] = useState(false);
-  const [editItem,  setEditItem]  = useState(null);
-  const [doTab,     setDoTab]     = useState(false);
-  const tots    = calcPOTotals(po, items);
-  const poDos   = (dos || []).filter((d) => d.poId === po.id);
-  const [bulkItems, setBulkItems] = useState(new Set());
-  const [showBulkEdit, setShowBulkEdit] = useState(false);
-  const toggleBulkItem = (id) => {
-    const s = new Set(bulkItems);
-    s.has(id) ? s.delete(id) : s.add(id);
-    setBulkItems(s);
-  };
-
-  const handleBulkCopyItems = () => {
-    const cols = getEnabledColumns(settings?.excelItemCols, DEFAULT_EXCEL_ITEM_COLS);
-    const headers = cols.map(c => c.label);
-
-    // Build poById map for this PO's items
-    const poById = { [po.id]: po };
-    const rows = buildItemRowsByIds(bulkItems, items, cols, poById);
-
-    copyTSV(headers, rows, () => {
-      toast(`✓ ${bulkItems.size} Item disalin!`);
-      // Keeping items selected
-    });
-  };
-  
-  return (
-    <div className="py-4 px-5 bg-[#fafcff] border-t border-border-default">
-      {/* Summary bar */}
-      <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-        <div className="flex gap-3.5 text-[11px] text-text-secondary flex-wrap">
-          <span>Ex PPN: <strong className="text-text-primary">{fmt(tots.exPPN)}</strong></span>
-          <span>PPN: <strong className="text-text-primary">{fmt(tots.ppn)}</strong></span>
-          <span>Total: <strong className="text-brand text-[13px]">{fmt(tots.total)}</strong></span>
-          {po.folder && (
-            <a href={po.folder} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-[11px] text-brand bg-brand-soft border border-brand-mid rounded-[5px] px-2 py-px no-underline font-semibold">
-              📁 Drive
-            </a>
-          )}
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {bulkItems.size > 0 && (
-            <>
-              <select className="border border-border-default bg-surface rounded-[5px] text-xs px-2 py-1 font-semibold text-text-primary cursor-pointer hover:border-brand-mid transition-colors focus:outline-none" onChange={(e) => {
-                 if(!e.target.value) return;
-                 bulkItems.forEach(id => {
-                   const i = items.find(x => x.id === id);
-                   if (i) onUpdateItem({ ...i, status: e.target.value });
-                 });
-                 toast("✓ Status Item diupdate");
-                 e.target.value = "";
-              }}>
-                <option value="">Ubah Status...</option>
-                {Object.entries(ITEM_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-              <Btn size="sm" variant="blue" onClick={handleBulkCopyItems}>
-                <Ico d={IC.copy} size={10} /> Copy {bulkItems.size} Item
-              </Btn>
-              <Btn size="sm" variant="blue" className="!px-3" onClick={() => setShowBulkEdit(true)}>
-                <Ico d={IC.edit} size={11} /> Edit
-              </Btn>
-              <Btn size="sm" variant="danger" onClick={() => { if (bulkItems.size > 0) { onConfirmDelete([...bulkItems], () => setBulkItems(new Set())); } }}>
-                <Ico d={IC.trash} size={10} /> Hapus {bulkItems.size} Item
-              </Btn>
-              <Btn size="sm" variant="ghost" onClick={() => setBulkItems(new Set())}><Ico d={IC.close} size={10} /></Btn>
-            </>
-          )}
-          <Btn size="sm" variant={doTab ? "blue" : "ghost"} onClick={() => setDoTab((v) => !v)}>
-            <Ico d={IC.truck} size={11} color={doTab ? "var(--color-brand)" : "var(--color-text-secondary)"} /> DO ({poDos.length})
-          </Btn>
-          <Btn size="sm" variant="ghost" onClick={() => onOpenDO(po, bulkItems)}><Ico d={IC.plus} size={11} /> Buat DO</Btn>
-          <Btn size="sm" variant="blue" onClick={() => setShowAdd(true)}><Ico d={IC.plus} size={11} /> Item</Btn>
-        </div>
-      </div>
-
-      {doTab && (
-        <div className="mb-3.5">
-          <DODetailPanel dos={dos} poId={po.id} po={po} items={items} onDeleteDO={onDeleteDO} />
-        </div>
-      )}
-
-      {!poItems.length && (
-        <div className="py-3.5 text-center text-text-muted text-xs bg-surface-alt rounded-md border border-dashed border-border-strong">Belum ada item.</div>
-      )}
-
-      {poItems.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[900px]">
-            <thead>
-              <tr>
-                <th className={`${thCls} w-8 ${stickyL} bg-surface-alt z-[2]`}>
-                  <input type="checkbox"
-                    checked={poItems.length > 0 && poItems.every((i) => bulkItems.has(i.id))}
-                    onChange={(e) => {
-                      const s = new Set(bulkItems);
-                      poItems.forEach((i) => e.target.checked ? s.add(i.id) : s.delete(i.id));
-                      setBulkItems(s);
-                    }}
-                  />
-                </th>
-                <th className={thCls}>Item</th>
-                <th className={thCls}>Qty/Unit</th>
-                <th className={thCls}>Delivered</th>
-                <th className={thCls}>Harga Jual</th>
-                <th className={thCls}>Net</th>
-                <th className={thCls}>Supplier Utama</th>
-                <th className={thCls}>Margin</th>
-                <th className={thCls}>Status</th>
-                <th className={thCls}>Delivery</th>
-                <th className={thCls}>Invoice</th>
-                <th className={thCls}>Zone</th>
-                <th className={thCls}>Note</th>
-                <th className={thCls}>DO</th>
-                <th className={`${thCls} w-24 text-center ${stickyR} bg-surface-alt z-[2]`} />
-              </tr>
-            </thead>
-            <tbody>
-              {poItems.map((item, i) => (
-                <ItemTableRow
-                  key={item.id}
-                  item={item}
-                  po={po}
-                  subIdx={i}
-                  isSel={bulkItems.has(item.id)}
-                  onToggleSel={() => toggleBulkItem(item.id)}
-                  onUpdate={onUpdateItem}
-                  onEdit={setEditItem}
-                  onDelete={(it) => onConfirmDelete([it.id], () => {})}
-                  suppliers={suppliers}
-                  dos={dos}
-                  zoneTypes={zoneTypes}
-                  stickyL={stickyL}
-                  stickyR={stickyR}
-                />
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-brand-soft border-t border-brand-mid">
-                <td colSpan={2} className={`${tdCls} font-bold text-[11px] text-text-secondary`}>TOTAL</td>
-                <td className={`${tdCls} font-mono font-bold`}>{poItems.reduce((s, i) => s + (Number(i.qty) || 0), 0)}</td>
-                <td className={tdCls} />
-                <td className={`${tdCls} font-mono font-bold text-brand`}>{fmt(poItems.reduce((s, i) => s + itemNet(i), 0))}</td>
-                <td className={tdCls} />
-                <td className={`${tdCls} font-mono font-bold text-green`}>{fmt(poItems.reduce((s, i) => { const m = itemMargin(i); return s + (m || 0); }, 0))}</td>
-                <td colSpan={6} className={tdCls} />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-
-      {showAdd && (
-        <Modal open onClose={() => setShowAdd(false)} title="Tambah Item" wide>
-          <ItemForm poId={po.id} zoneTypes={zoneTypes} suppliers={suppliers} dos={dos} hsDB={hsDB}
-            onAddSupplier={onAddSupplier}
-            onSave={(item) => { onAddItem(item); setShowAdd(false); }}
-            onClose={() => setShowAdd(false)}
-          />
-        </Modal>
-      )}
-      {editItem && (
-        <Modal open onClose={() => setEditItem(null)} title="Edit Item" wide>
-          <ItemForm initial={editItem} poId={po.id} zoneTypes={zoneTypes} suppliers={suppliers} dos={dos} hsDB={hsDB}
-            onAddSupplier={onAddSupplier}
-            onSave={(item) => { onUpdateItem(item); setEditItem(null); }}
-            onClose={() => setEditItem(null)}
-          />
-        </Modal>
-      )}
-
-      {showSupForm && (
-        <SupplierFormModal
-          onSave={(s) => { onAddSupplier(s); setShowSupForm(false); toast("✓ Supplier ditambahkan"); }}
-          onClose={() => setShowSupForm(false)}
-        />
-      )}
-
-      {showBulkEdit && (
-        <BulkEditModal
-          items={[...bulkItems].map(id => items.find(i => i.id === id)).filter(Boolean)}
-          suppliers={suppliers}
-          onAddSupplier={onAddSupplier}
-          zoneTypes={zoneTypes.map(z => typeof z === 'object' ? z.name : z)}
-          onClose={() => setShowBulkEdit(false)}
-          onSave={(payload) => {
-            [...bulkItems].forEach((id) => {
-              const item = items.find((i) => i.id === id);
-              if (!item) return;
-              const n = { ...item };
-              if ("zoneType" in payload) n.zoneType = payload.zoneType;
-              if ("deliveryDate" in payload) n.deliveryDate = payload.deliveryDate;
-              if ("invoiceNo" in payload) n.invoiceNo = payload.invoiceNo;
-              if ("doNo" in payload) n.doNos = [...new Set([...(n.doNos || []), payload.doNo])];
-              if ("supplierAssignments" in payload) {
-                n.supplierAssignments = mergeSupplierAssignments(
-                  n.supplierAssignments,
-                  payload.supplierAssignments,
-                  id
-                );
-              }
-              onUpdateItem(n);
-            });
-            setShowBulkEdit(false);
-            toast(`✓ Update massal diterapkan ke ${bulkItems.size} item`);
-          }}
-        />
-      )}
-    </div>
-  );
-}
 
 /* ── POList (exported) ── */
 export function POList() {
   const {
     pos, items, suppliers, dos, companies, zoneTypes, settings, hsDB,
-    addPO, updatePO, deletePO, addItem, updateItem, deleteItem,
+    addPO, updatePO, deletePO, bulkDeletePOs, addItem, updateItem, deleteItem,
     addSupplier, addCompany, saveDO, deleteDO, toast,
     jumpTargetPOId, setJumpTargetPO,
   } = usePOStore();
@@ -539,7 +220,13 @@ export function POList() {
           unknownComps.add(company);
         }
         
-        if (row.hsCode) hsCodesToSync.set(row.hsCode, itemName || "");
+        // Only add HS code if we have an actual HS code description field, not item name
+        if (row.hsCode && row.hsCodeDesc) {
+          hsCodesToSync.set(row.hsCode, row.hsCodeDesc);
+        } else if (row.hsCode && !hsCodesToSync.has(row.hsCode)) {
+          // If no description, use empty string (only if not already set)
+          hsCodesToSync.set(row.hsCode, "");
+        }
         if (row.zoneType) zonesToSync.add(row.zoneType);
 
         if (!itemName) return; // This row has no item to add, but it successfully updated the trackers
@@ -603,17 +290,24 @@ export function POList() {
           for (const [code, desc] of hsCodesToSync) await usePOStore.getState().upsertHSCode(code, desc);
           for (const zone of zonesToSync) await usePOStore.getState().upsertZoneType(zone);
 
-          // Then add POs with their items
+          // Then add POs with their items in batches for better performance
           let poCount = 0;
-          for (const p of newPOs) {
-            const { tempId, ...poData } = p;
-            const cleanItems = newItems.filter((i) => i.poTempId === tempId).map(({ poTempId, ...itemData }) => itemData);
+          const batchSize = 5;
+          for (let i = 0; i < newPOs.length; i += batchSize) {
+            const batch = newPOs.slice(i, i + batchSize);
 
-            await addPO(poData, cleanItems);
-            poCount++;
-            if (poCount % 5 === 0 || poCount === newPOs.length) {
-              toast(`📦 Mengimpor PO... ${poCount}/${newPOs.length}`);
-            }
+            // Process batch of POs concurrently
+            await Promise.all(batch.map(async (p) => {
+              const { tempId, ...poData } = p;
+              const cleanItems = newItems
+                .filter((item) => item.poTempId === tempId)
+                .map(({ poTempId, ...itemData }) => itemData);
+
+              await addPO(poData, cleanItems);
+            }));
+
+            poCount += batch.length;
+            toast(`📦 Mengimpor PO... ${poCount}/${newPOs.length}`);
           }
 
           let msg = `✓ Import selesai: ${newPOs.length} PO, ${newItems.length} item`;
@@ -654,15 +348,8 @@ export function POList() {
   };
   const bulkDelete = () => {
     ask(`Hapus ${bulkSel.size} PO beserta seluruh item dan DO-nya?`, async () => {
-      toast(`🔄 Menghapus ${bulkSel.size} PO...`);
       const ids = [...bulkSel];
-      let count = 0;
-      for (const id of ids) {
-        await deletePO(id);
-        count++;
-        if (count % 10 === 0) toast(`🗑️ Menghapus... ${count}/${ids.length}`);
-      }
-      toast(`✓ ${ids.length} PO dihapus`);
+      await bulkDeletePOs(ids);
       setBulkSel(new Set());
     }, { danger: true, confirmLabel: "Ya, Hapus Semua" });
   };
@@ -977,9 +664,14 @@ export function POList() {
                   {isExp && (
                     <tr key={po.id + "_exp"}>
                       <td colSpan={12} className="p-0 border-b border-border-default bg-surface-alt/30">
-                        <ExpandedRow
-                          po={po} items={items} suppliers={suppliers} dos={dos}
-                          zoneTypes={zoneTypes} settings={settings} hsDB={hsDB}
+                        <POExpandedRow
+                          po={po}
+                          items={items}
+                          suppliers={suppliers}
+                          dos={dos}
+                          zoneTypes={zoneTypes}
+                          settings={settings}
+                          hsDB={hsDB}
                           onUpdateItem={updateItem}
                           onAddItem={addItem}
                           onConfirmDelete={(ids, cb) => ask(`Hapus ${ids.length} item?`, () => { ids.forEach((id) => deleteItem(id)); cb(); }, { danger: true, confirmLabel: "Ya, Hapus" })}

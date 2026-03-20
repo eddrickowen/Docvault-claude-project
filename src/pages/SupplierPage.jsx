@@ -3,7 +3,7 @@ import { Btn, Ico, IC, TagChip, SBadge, FIn, FSel } from "../components/ui";
 import { SupplierFormModal } from "../components/forms";
 import { useConfirm } from "../hooks";
 import { usePOStore } from "../store/usePOStore";
-import { itemNet, itemMargin, fmt, fmtShort } from "../lib/helpers";
+import { itemNet, fmt, fmtShort } from "../lib/helpers";
 import { ITEM_STATUS } from "../lib/constants";
 import { thCls, tdCls } from "../lib/tableStyles";
 

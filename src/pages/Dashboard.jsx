@@ -2,8 +2,8 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { Ico, IC, SBadge, Btn } from "../components/ui";
 import { usePOStore } from "../store/usePOStore";
 import {
-  isOverdue, isIncompletePO, calcPOTotals, itemMargin, itemNet,
-  fmt, fmtShort, fmtPct, diffDays,
+  isOverdue, isIncompletePO, calcPOTotals, itemMargin,
+  fmt, fmtPct, diffDays,
 } from "../lib/helpers";
 import { INIT_PO_STATUS } from "../lib/constants";
 
@@ -162,15 +162,11 @@ export function Dashboard({ onJump }) {
   const aNotInv        = useCountUp(notInvoicedPOs.length);
   const aDOCount       = useCountUp(fDos.length);
 
-  const [showAllCo, setShowAllCo] = useState(false);
-  const [showAllStatus, setShowAllStatus] = useState(false);
-
   const byCoAll = useMemo(() => {
     const m = {};
     fPos.forEach((p) => { const t = poTotalsMap.get(p.id).total; m[p.company] = (m[p.company] || 0) + t; });
     return Object.entries(m).sort((a, b) => b[1] - a[1]);
   }, [fPos, poTotalsMap]);
-  const byCo = showAllCo ? byCoAll : byCoAll.slice(0, 3);
 
   const byStatusAll = useMemo(() => {
     const stats = Object.entries(INIT_PO_STATUS).map(([k, v]) => {
@@ -180,7 +176,6 @@ export function Dashboard({ onJump }) {
     });
     return stats.filter((x) => x.count > 0 || x.revenue > 0);
   }, [fPos, poTotalsMap]);
-  const byStatus = showAllStatus ? byStatusAll : byStatusAll.slice(0, 3);
 
   const maxCo = byCoAll.length ? byCoAll[0][1] : 1;
   const maxStatRev = byStatusAll.length ? Math.max(...byStatusAll.map(s => s.revenue)) : 1;
