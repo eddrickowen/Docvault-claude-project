@@ -14,6 +14,8 @@ import {
 import { fuzzySearchPOs } from "../lib/fuzzySearch";
 import { INIT_PO_STATUS, ITEM_STATUS, PAGE_SIZE, mkItem, VENDOR_NAME, DEFAULT_EXCEL_ITEM_COLS, DEFAULT_EXCEL_PO_COLS } from "../lib/constants";
 import { stickyL as tableStickyL, stickyR as tableStickyR } from "../lib/tableStyles";
+import { buildItemRowsByIds, getEnabledColumns } from "../lib/exportHelpers";
+import { mergeSupplierAssignments } from "../lib/supplierHelpers";
 import * as XLSX from 'xlsx';
 
 /* ── Class constants (page-specific overrides) ── */
@@ -141,34 +143,13 @@ function ExpandedRow({ po, items, suppliers, dos, zoneTypes, settings, hsDB = []
   };
 
   const handleBulkCopyItems = () => {
-    const cols = (settings?.excelItemCols || DEFAULT_EXCEL_ITEM_COLS).filter(c => c.enabled);
+    const cols = getEnabledColumns(settings?.excelItemCols, DEFAULT_EXCEL_ITEM_COLS);
     const headers = cols.map(c => c.label);
-    const rows = [];
-    bulkItems.forEach(id => {
-      const i = items.find(x => x.id === id);
-      if (!i) return;
-      rows.push(cols.map(({ key }) => {
-        switch (key) {
-          case "itemName": return i.itemName || "";
-          case "qty": return i.qty;
-          case "unit": return i.unit || "";
-          case "unitPrice": return i.unitPrice || 0;
-          case "net": return itemNet(i);
-          case "buy": return itemBuy(i);
-          case "margin": { const m = itemMargin(i); return m ?? "-"; }
-          case "status": return ITEM_STATUS[i.status]?.label || i.status || "";
-          case "deliveryDate": return i.deliveryDate || "";
-          case "invoiceNo": return i.invoiceNo || "";
-          case "doNos": return (i.doNos || []).join(";");
-          case "zoneType": return po.zoneType || i.zoneType || "";
-          case "poNo": return po?.orderNo || "";
-          case "company": return po?.company || "";
-          case "hsCode": return i.hsCode || "";
-          case "desc": return i.desc || "";
-          default: return "";
-        }
-      }));
-    });
+
+    // Build poById map for this PO's items
+    const poById = { [po.id]: po };
+    const rows = buildItemRowsByIds(bulkItems, items, cols, poById);
+
     copyTSV(headers, rows, () => {
       toast(`✓ ${bulkItems.size} Item disalin!`);
       // Keeping items selected
@@ -343,24 +324,11 @@ function ExpandedRow({ po, items, suppliers, dos, zoneTypes, settings, hsDB = []
               if ("invoiceNo" in payload) n.invoiceNo = payload.invoiceNo;
               if ("doNo" in payload) n.doNos = [...new Set([...(n.doNos || []), payload.doNo])];
               if ("supplierAssignments" in payload) {
-                let updatedAssigns = [...(n.supplierAssignments || [])];
-                payload.supplierAssignments.forEach(newA => {
-                  if (newA.role === "main") {
-                    updatedAssigns = updatedAssigns.filter(a => a.role !== "main");
-                  }
-                  updatedAssigns = updatedAssigns.filter(a => a.supplierId !== newA.supplierId);
-                  const itemPrices = newA.prices ? newA.prices[id] : { pricePerUnit: 0, shippingTotal: 0 };
-                  updatedAssigns.push({ 
-                    id: uid(), 
-                    supplierId: newA.supplierId, 
-                    role: newA.role, 
-                    link: newA.link, 
-                    notes: newA.notes,
-                    pricePerUnit: itemPrices?.pricePerUnit || 0,
-                    shippingTotal: itemPrices?.shippingTotal || 0
-                  });
-                });
-                n.supplierAssignments = updatedAssigns;
+                n.supplierAssignments = mergeSupplierAssignments(
+                  n.supplierAssignments,
+                  payload.supplierAssignments,
+                  id
+                );
               }
               onUpdateItem(n);
             });

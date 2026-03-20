@@ -5,12 +5,14 @@ import { ItemForm, BulkEditModal } from "../components/forms";
 import { useConfirm, useDataTable } from "../hooks";
 import { usePOStore } from "../store/usePOStore";
 import {
-  itemNet, itemMargin, itemBuy, getQtyDel, fmtDate, fmtShort, fmt, today, uid,
+  itemNet, itemMargin, itemBuy, getQtyDel, fmtDate, fmtShort, fmt, today,
   exportCSV, copyTSV, applyDateFilter, applyNumFilter, applyTextFilter,
 } from "../lib/helpers";
 import { fuzzySearchItems } from "../lib/fuzzySearch";
 import { ITEM_STATUS, INIT_PO_STATUS, PAGE_SIZE, DEFAULT_EXCEL_ITEM_COLS } from "../lib/constants";
 import { thCls, tdCls, stickyL, stickyR } from "../lib/tableStyles";
+import { buildItemRowsByIds, getEnabledColumns } from "../lib/exportHelpers";
+import { mergeSupplierAssignments } from "../lib/supplierHelpers";
 
 export function AllItems({ onJump }) {
   const { items, pos, suppliers, dos, zoneTypes, settings, hsDB, updateItem, deleteItem, addSupplier, toast } = usePOStore();
@@ -166,35 +168,10 @@ export function AllItems({ onJump }) {
   };
 
   const handleBulkCopyItems = () => {
-    const cols = (settings?.excelItemCols || DEFAULT_EXCEL_ITEM_COLS).filter(c => c.enabled);
+    const cols = getEnabledColumns(settings?.excelItemCols, DEFAULT_EXCEL_ITEM_COLS);
     const headers = cols.map(c => c.label);
-    const rows = [];
-    bulkSel.forEach(id => {
-      const i = items.find(x => x.id === id);
-      if (!i) return;
-      const po = poById[i.poId];
-      rows.push(cols.map(({ key }) => {
-        switch (key) {
-          case "itemName": return i.itemName || "";
-          case "qty": return i.qty;
-          case "unit": return i.unit || "";
-          case "unitPrice": return i.unitPrice || 0;
-          case "net": return itemNet(i);
-          case "buy": return itemBuy(i);
-          case "margin": { const m = itemMargin(i); return m ?? "-"; }
-          case "status": return ITEM_STATUS[i.status]?.label || i.status || "";
-          case "deliveryDate": return i.deliveryDate || "";
-          case "invoiceNo": return i.invoiceNo || "";
-          case "doNos": return (i.doNos || []).join(";");
-          case "zoneType": return po?.zoneType || i.zoneType || ""; // Assuming zoneType might come from PO if not on item
-          case "poNo": return po?.orderNo || "";
-          case "company": return po?.company || "";
-          case "hsCode": return i.hsCode || "";
-          case "desc": return i.desc || "";
-          default: return "";
-        }
-      }));
-    });
+    const rows = buildItemRowsByIds(bulkSel, items, cols, poById);
+
     copyTSV(headers, rows, () => {
       toast(`✓ ${bulkSel.size} Item disalin!`);
     });
@@ -448,24 +425,11 @@ export function AllItems({ onJump }) {
               if ("invoiceNo" in payload) n.invoiceNo = payload.invoiceNo;
               if ("doNo" in payload) n.doNos = [...new Set([...(n.doNos || []), payload.doNo])];
               if ("supplierAssignments" in payload) {
-                let updatedAssigns = [...(n.supplierAssignments || [])];
-                payload.supplierAssignments.forEach(newA => {
-                  if (newA.role === "main") {
-                    updatedAssigns = updatedAssigns.filter(a => a.role !== "main");
-                  }
-                  updatedAssigns = updatedAssigns.filter(a => a.supplierId !== newA.supplierId);
-                  const itemPrices = newA.prices ? newA.prices[id] : { pricePerUnit: 0, shippingTotal: 0 };
-                  updatedAssigns.push({ 
-                    id: uid(), 
-                    supplierId: newA.supplierId, 
-                    role: newA.role, 
-                    link: newA.link, 
-                    notes: newA.notes,
-                    pricePerUnit: itemPrices?.pricePerUnit || 0,
-                    shippingTotal: itemPrices?.shippingTotal || 0
-                  });
-                });
-                n.supplierAssignments = updatedAssigns;
+                n.supplierAssignments = mergeSupplierAssignments(
+                  n.supplierAssignments,
+                  payload.supplierAssignments,
+                  id
+                );
               }
               updateItem(n);
             });

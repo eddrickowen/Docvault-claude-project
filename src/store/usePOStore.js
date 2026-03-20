@@ -15,22 +15,37 @@ import { today } from "../lib/helpers";
 /**
  * Given updated items array, return updated pos array with auto-synced statuses.
  * No side-effects — pure function, called inside set() to keep state consistent.
+ * Optimized with Maps for O(n) complexity instead of O(n²).
  */
 function syncPOStatuses(pos, items) {
   const newPos = [...pos];
   const newItems = [...items];
   let changed = false;
 
+  // Build item lookup maps for O(1) access
+  const itemsByPoId = new Map();
+  const itemIndexMap = new Map();
+
+  newItems.forEach((item, idx) => {
+    if (!itemsByPoId.has(item.poId)) {
+      itemsByPoId.set(item.poId, []);
+    }
+    itemsByPoId.get(item.poId).push(item);
+    itemIndexMap.set(item.id, idx);
+  });
+
   newPos.forEach((po, idx) => {
-    const poItems = newItems.filter((i) => i.poId === po.id);
+    const poItems = itemsByPoId.get(po.id) || [];
     if (!poItems.length) return;
 
     // PO -> Item Cascade
     if (["paid", "delivered", "invoiced", "cancelled"].includes(po.status)) {
       poItems.forEach(item => {
         if (item.status !== po.status && STATUS_RANK[po.status] > (STATUS_RANK[item.status] || 0)) {
-          const itemIdx = newItems.findIndex(i => i.id === item.id);
+          const itemIdx = itemIndexMap.get(item.id);
           newItems[itemIdx] = { ...newItems[itemIdx], status: po.status };
+          // Update in-memory ref too
+          item.status = po.status;
           changed = true;
         }
       });
