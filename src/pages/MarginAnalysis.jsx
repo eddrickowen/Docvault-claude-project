@@ -2,9 +2,9 @@ import { useState, useMemo, Fragment } from "react";
 import { Ico, IC, FIn } from "../components/ui";
 import { CopyTSVButton } from "../components/shared";
 import { usePOStore } from "../store/usePOStore";
-import { itemNet, itemBuy, itemMargin, fmt } from "../lib/helpers";
+import { itemNet, itemBuy, itemMargin, fmt, buildPoMap } from "../lib/helpers";
 
-/* ── Class constants (page-specific overrides) ── */
+/* ── Class constants (page-specific overrides — differ from shared tableStyles) ── */
 const thCls    = "py-[9px] px-[10px] text-[9px] font-bold text-text-secondary text-left border-b-2 border-border-default uppercase tracking-[.04em] bg-surface-alt";
 const tdCls    = "py-[9px] px-[10px] border-b border-border-default text-xs align-middle";
 const tabBtn   = (active) => `py-[5px] px-3.5 rounded-[5px] border-none text-[11px] font-semibold cursor-pointer ${active ? "bg-surface text-text-primary shadow-sm" : "bg-transparent text-text-muted"}`;
@@ -25,11 +25,7 @@ export function MarginAnalysis() {
   const [sortDir, setSortDir] = useState("desc");
   const [expRows, setExpRows]  = useState(new Set());
 
-  const poById = useMemo(() => {
-    const map = {};
-    pos.forEach((p) => { map[p.id] = p; });
-    return map;
-  }, [pos]);
+  const poById = useMemo(() => buildPoMap(pos), [pos]);
 
   const groups = useMemo(() => {
     const m = {};

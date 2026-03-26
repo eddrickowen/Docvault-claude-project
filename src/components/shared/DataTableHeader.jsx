@@ -4,6 +4,7 @@ import { ColFilter, TextFilter, DateRangeFilter, NumberRangeFilter } from "./Fil
 export function DataTableHeader({
   cols, rows,
   paged, bulkSel, setBulkSel,
+  isAllSelected, // Optimized prop from parent
   sort, toggleSort,
   colF, setColF,
   dateF, setDateF,
@@ -26,17 +27,13 @@ export function DataTableHeader({
         <th className={`${thCls} w-9 sticky top-0 left-0 bg-surface z-[12] shadow-[3px_0_6px_rgba(0,0,0,0.05)]`}>
           <input
             type="checkbox"
-            checked={
-              paged.length > 0 &&
-              paged
-                .flatMap((p) => getRowIds(p))
-                .every((id) => bulkSel.has(id))
-            }
+            checked={isAllSelected}
             onChange={(e) => {
               const s = new Set(bulkSel);
+              const checked = e.target.checked;
               paged.forEach((p) => {
-    getRowIds(p).forEach((id) => {
-                  if (e.target.checked) s.add(id);
+                getRowIds(p).forEach((id) => {
+                  if (checked) s.add(id);
                   else s.delete(id);
                 });
               });

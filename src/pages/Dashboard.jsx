@@ -2,8 +2,8 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { Ico, IC, SBadge, Btn } from "../components/ui";
 import { usePOStore } from "../store/usePOStore";
 import {
-  isOverdue, isIncompletePO, calcPOTotals, itemMargin,
-  fmt, fmtPct, diffDays,
+  isOverdue, isIncompletePO, calcPOTotals, itemMargin, itemNet,
+  fmt, fmtPct, fmtDate, diffDays, getAgingBucketsConfig, getAgingBucket,
 } from "../lib/helpers";
 import { INIT_PO_STATUS } from "../lib/constants";
 
@@ -103,12 +103,12 @@ export function Dashboard({ onJump }) {
   const [selYear, setSelYear] = useState(() => {
     const cur = new Date().getFullYear();
     if (pos.some(p => new Date(p.orderDate).getFullYear() === cur)) return cur;
-    return -1; // Default to 'Semua Tahun' if no data for current year
+    return -1;
   });
   const [selCompany, setSelCompany] = useState("all");
-  const [overdueThreshold, setOverdueThreshold] = useState(settings.overdueDays || 7);
-  const [detailSource, setDetailSource] = useState(null);
+  const [selectedBucket, setSelectedBucket] = useState(null);
   const [drillSearch, setDrillSearch] = useState("");
+  const [detailSource, setDetailSource] = useState(null);
 
   const filteredData = useMemo(() => {
     let fPos = [...pos];
@@ -123,7 +123,6 @@ export function Dashboard({ onJump }) {
 
   const { fPos, fItems, fDos } = filteredData;
 
-  // Pre-compute PO totals Map for performance (avoid recalculating in multiple places)
   const poTotalsMap = useMemo(() => {
     const map = new Map();
     fPos.forEach((p) => {
@@ -132,12 +131,53 @@ export function Dashboard({ onJump }) {
     return map;
   }, [fPos, items]);
 
-  const overduePOs    = fPos.filter((p) => isOverdue(p, overdueThreshold));
+  const overdueThreshold = 7;
+  const overduePOs    = useMemo(() => fPos.filter((p) => isOverdue(p, overdueThreshold)), [fPos]);
   const urgentPOs     = fPos.filter((p) => p.priority === "urgent" && !["paid", "cancelled"].includes(p.status));
   const incompletePOs = fPos.filter((p) => isIncompletePO(p));
 
+  const agingBuckets = useMemo(() => {
+    const buckets = getAgingBucketsConfig().map(b => ({ ...b, count: 0, items: [] }));
+    fPos.forEach(p => {
+      if (["paid", "cancelled", "received"].includes(p.status)) return;
+      const days = diffDays(p.orderDate);
+      const bucket = getAgingBucket(days);
+      if (bucket) {
+        const found = buckets.find(b => b.label === bucket.label);
+        if (found) {
+          found.count++;
+          found.items.push(p);
+        }
+      }
+    });
+    return buckets;
+  }, [fPos]);
+
+  const overdueBucket = useMemo(() => ({
+    label: "Terlambat (Overdue)",
+    count: overduePOs.length,
+    items: overduePOs,
+    color: "#ef4444",
+    isOverdue: true
+  }), [overduePOs]);
+
+  useEffect(() => {
+    if (!selectedBucket) {
+      if (overdueBucket.count > 0) setSelectedBucket(overdueBucket);
+      else if (agingBuckets.length > 0) setSelectedBucket(agingBuckets.find(b => b.count > 0) || agingBuckets[0]);
+    } else {
+      // Refresh selected bucket if data changes
+      if (selectedBucket.isOverdue) {
+        if (selectedBucket.count !== overdueBucket.count) setSelectedBucket(overdueBucket);
+      } else {
+        const matched = agingBuckets.find(b => b.label === selectedBucket.label);
+        if (matched && matched.count !== selectedBucket.count) setSelectedBucket(matched);
+      }
+    }
+  }, [agingBuckets, overdueBucket]);
+
   const { totalRev, totalExPPN } = fPos.reduce((acc, p) => {
-    const { total, exPPN } = poTotalsMap.get(p.id);
+    const { total, exPPN } = poTotalsMap.get(p.id) || { total: 0, exPPN: 0 };
     acc.totalRev += total;
     acc.totalExPPN += exPPN;
     return acc;
@@ -148,7 +188,7 @@ export function Dashboard({ onJump }) {
   const notInvoicedPOs  = fPos.filter(p => !["invoiced", "paid", "cancelled"].includes(p.status));
 
   const kpis = [
-    { id: "total-po",      label: "Total PO",     val: fPos.length, sub: `Semua PO terfilter`, icon: IC.po, color: "var(--color-brand)", bg: "var(--color-brand-soft)", data: fPos },
+    { id: "total-po-kpi", label: "Total PO", val: fPos.length, sub: `Semua PO terfilter`, icon: IC.po, color: "var(--color-brand)", bg: "var(--color-brand-soft)", data: fPos },
     { id: "not-delivered", label: "Belum Kirim", val: notDeliveredPOs.length, sub: `inc. partial`, icon: IC.clock, color: "var(--color-orange)", bg: "var(--color-orange-soft)", data: notDeliveredPOs },
     { id: "not-invoiced",  label: "Belum Tagih",  val: notInvoicedPOs.length, sub: `inc. delivered`, icon: IC.stats, color: "var(--color-purple)", bg: "var(--color-purple-soft)", data: notInvoicedPOs },
     { id: "revenue",       label: "Revenue",      val: fmt(totalRev), sub: `Ex PPN: ${fmt(totalExPPN)}`, icon: IC.trend, color: "var(--color-green)", bg: "var(--color-green-soft)", data: fPos },
@@ -156,7 +196,6 @@ export function Dashboard({ onJump }) {
     { id: "margin",        label: "Est. Margin",  val: fmt(totalMargin), sub: `${fmtPct(totalMargin, totalExPPN)} dari rev`, icon: IC.percent, color: "var(--color-orange-dark)", bg: "var(--color-orange-soft)", data: fItems },
   ];
 
-  /* ── Animated counters ── */
   const aPOCount       = useCountUp(fPos.length);
   const aNotDel        = useCountUp(notDeliveredPOs.length);
   const aNotInv        = useCountUp(notInvoicedPOs.length);
@@ -164,22 +203,17 @@ export function Dashboard({ onJump }) {
 
   const byCoAll = useMemo(() => {
     const m = {};
-    fPos.forEach((p) => { const t = poTotalsMap.get(p.id).total; m[p.company] = (m[p.company] || 0) + t; });
+    fPos.forEach((p) => { const totals = poTotalsMap.get(p.id); if (totals) m[p.company] = (m[p.company] || 0) + totals.total; });
     return Object.entries(m).sort((a, b) => b[1] - a[1]);
   }, [fPos, poTotalsMap]);
 
   const byStatusAll = useMemo(() => {
-    const stats = Object.entries(INIT_PO_STATUS).map(([k, v]) => {
+    return Object.entries(INIT_PO_STATUS).map(([k, v]) => {
       const filteredForStatus = fPos.filter((p) => p.status === k);
-      const rev = filteredForStatus.reduce((s, p) => s + poTotalsMap.get(p.id).total, 0);
+      const rev = filteredForStatus.reduce((s, p) => s + (poTotalsMap.get(p.id)?.total || 0), 0);
       return { k, label: v.label, count: filteredForStatus.length, revenue: rev, color: v.color, raw: filteredForStatus };
-    });
-    return stats.filter((x) => x.count > 0 || x.revenue > 0);
+    }).filter(x => x.count > 0);
   }, [fPos, poTotalsMap]);
-
-  const maxCo = byCoAll.length ? byCoAll[0][1] : 1;
-  const maxStatRev = byStatusAll.length ? Math.max(...byStatusAll.map(s => s.revenue)) : 1;
-  const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
   const drillFiltered = useMemo(() => {
     if (!detailSource) return [];
@@ -188,26 +222,17 @@ export function Dashboard({ onJump }) {
     return detailSource.data.filter(p => {
       const po = p.orderNo ? p : pos.find(x => x.id === (p.poId || p.id));
       if (!po) return false;
-      return (
-        po.orderNo?.toLowerCase().includes(q) ||
-        po.company?.toLowerCase().includes(q) ||
-        String(po.status)?.toLowerCase().includes(q)
-      );
+      return (po.orderNo?.toLowerCase().includes(q) || po.company?.toLowerCase().includes(q));
     });
   }, [detailSource, drillSearch, pos]);
 
   const handleKPISelect = (k) => {
-    setDetailSource({ type: k.id, label: k.label, data: k.data });
+    setDetailSource({ id: k.id, label: k.label, data: k.data });
     setDrillSearch("");
-    setTimeout(() => {
-      const el = document.getElementById("drill-section");
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
-        el.classList.add("ring-2", "ring-brand", "ring-offset-4");
-        setTimeout(() => el.classList.remove("ring-2", "ring-brand", "ring-offset-4"), 2000);
-      }
-    }, 100);
+    setTimeout(() => document.getElementById("drill-section")?.scrollIntoView({ behavior: "smooth" }), 100);
   };
+
+  const monthsList = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
   return (
     <div className="p-5 overflow-y-auto h-full w-full bg-bg-app/20 pb-20 custom-scroll">
@@ -218,7 +243,7 @@ export function Dashboard({ onJump }) {
             <span className="text-[10px] font-bold text-text-muted uppercase px-1">Bulan</span>
             <select value={selMonth} onChange={(e) => setSelMonth(Number(e.target.value))} className="bg-bg-app border border-border-strong text-text-primary text-[12px] rounded-lg px-2.5 py-1.5 outline-none cursor-pointer">
               <option value={-1}>Semua Bulan</option>
-              {months.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              {monthsList.map((m, i) => <option key={m} value={i}>{m}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
@@ -236,45 +261,16 @@ export function Dashboard({ onJump }) {
             </select>
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Btn size="sm" variant="ghost" onClick={() => { setSelMonth(-1); setSelYear(new Date().getFullYear()); setSelCompany("all"); setDetailSource(null); }}>
-             Reset Filter
-          </Btn>
-        </div>
-      </div>
-
-      {/* Month Sparkline */}
-      <div className="bg-surface border border-border-default rounded-xl p-4 pb-7 mb-5 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-bold text-text-secondary uppercase tracking-wide flex items-center gap-2">
-            <Ico d={IC.stats} size={12} color="var(--color-brand)" />
-            PO Timeline {selYear !== -1 ? selYear : "(Semua Tahun)"}
-          </div>
-          {selMonth !== -1 && (
-            <button onClick={() => setSelMonth(-1)} className="text-[10px] text-brand font-semibold hover:underline">Reset Bulan</button>
-          )}
-        </div>
-        <MonthSparkline pos={pos} selYear={selYear} selMonth={selMonth} setSelMonth={setSelMonth} />
+        <Btn size="sm" variant="ghost" onClick={() => { setSelMonth(-1); setSelYear(new Date().getFullYear()); setSelCompany("all"); setDetailSource(null); }}>Reset Filter</Btn>
       </div>
 
       {/* KPI Cards */}
       <div className="flex flex-wrap lg:flex-nowrap gap-3 mb-6 items-stretch overflow-x-auto pb-2 custom-scroll">
         {kpis.map((k) => (
-          <div 
-            key={k.id} 
-            onClick={() => handleKPISelect(k)}
-            className={`${kpiCard} shrink-0 transition-all hover:translate-y-[-2px] hover:shadow-md cursor-pointer group active:scale-[0.98] ${detailSource?.type === k.id ? 'ring-2 ring-brand ring-offset-2' : ''} ${k.id === "revenue" || k.id === "margin" ? "flex-[1.5] min-w-[200px]" : "flex-1 min-w-[145px]"}`} 
-            style={{ background: k.bg }}
-          >
-            <div className="flex justify-between items-start">
-              <div className="w-[38px] h-[38px] rounded-xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform" style={{ background: `${k.color}25` }}>
-                <Ico d={k.icon} size={18} color={k.color} />
-              </div>
-              {detailSource?.type === k.id && <div className="bg-brand text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase">Selected</div>}
-            </div>
-            <div className={`${kpiValue} ${k.id === 'revenue' || k.id === 'margin' ? 'text-[15px]' : ''}`} style={{ color: k.color }} title={String(k.val)}>
-              {k.id === "total-po" ? aPOCount : k.id === "not-delivered" ? aNotDel : k.id === "not-invoiced" ? aNotInv : k.id === "surat-jalan" ? aDOCount : k.val}
+          <div key={k.id} onClick={() => handleKPISelect(k)} className={`${kpiCard} shrink-0 transition-all hover:translate-y-[-2px] hover:shadow-md cursor-pointer group ${detailSource?.id === k.id ? 'ring-2 ring-brand ring-offset-2' : ''} ${k.id === "revenue" || k.id === "margin" ? "flex-[1.5] min-w-[200px]" : "flex-1 min-w-[145px]"}`} style={{ background: k.bg }}>
+            <div className="w-[38px] h-[38px] rounded-xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform" style={{ background: `${k.color}25` }}><Ico d={k.icon} size={18} color={k.color} /></div>
+            <div className={`${kpiValue} ${k.id === 'revenue' || k.id === 'margin' ? 'text-[15px]' : ''}`} style={{ color: k.color }}>
+              {k.id === "total-po-kpi" ? aPOCount : k.id === "not-delivered" ? aNotDel : k.id === "not-invoiced" ? aNotInv : k.id === "surat-jalan" ? aDOCount : k.val}
             </div>
             <div className={kpiLabel}>{k.label}</div>
             <div className={kpiSub}>{k.sub}</div>
@@ -282,305 +278,218 @@ export function Dashboard({ onJump }) {
         ))}
       </div>
 
-      {/* Charts */}
-      <div className="grid gap-5 mb-6" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(380px,1fr))" }}>
-        <div className={chartBox}>
-          <div className="flex justify-between items-center mb-4 border-b border-border-default pb-2">
-            <div className="text-[15px] font-bold text-text-primary flex items-center gap-2">
-               <Ico d={IC.stats} size={14} color="var(--color-brand)" />
-               Revenue per Perusahaan
-               <span className="ml-auto text-[11px] font-mono text-text-muted bg-bg-app px-2 py-0.5 rounded border border-border-default">Total: {fmt(totalRev)}</span>
+      {/* Unified Aging & Detail Group */}
+      <div className="bg-surface border border-border-default rounded-xl shadow-md overflow-hidden mb-8 transition-all hover:shadow-lg">
+        <div className="p-4 bg-brand/5 border-b border-border-default flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-brand-soft rounded-lg flex items-center justify-center shadow-sm"><Ico d={IC.clock} size={18} color="var(--color-brand)" /></div>
+            <div>
+              <h2 className="text-[16px] font-bold text-text-primary leading-tight">Aging & Overdue Analysis</h2>
+              <p className="text-[11px] text-text-muted font-medium">Monitoring track record keterlambatan PO non-paid</p>
             </div>
-          </div>
-          <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scroll">
-            {byCoAll.map(([co, val]) => (
-              <div key={co} className="group cursor-pointer hover:bg-bg-app p-1 rounded-lg transition-colors" onClick={() => handleKPISelect({ id: `co-${co}`, label: `Revenue: ${co}`, data: fPos.filter(p => p.company === co) })}>
-                <div className="flex justify-between items-end mb-[5px]">
-                  <span className="text-[13px] text-text-secondary truncate max-w-[260px] font-medium" title={co}>{co}</span>
-                  <span className="text-[13px] font-bold text-text-primary font-mono bg-bg-app px-2 py-0.5 rounded-md">{fmt(val)}</span>
-                </div>
-                <div className="h-[7px] bg-bg-app rounded-full overflow-hidden shadow-inner">
-                  <div className="h-full bg-brand rounded-full transition-all duration-500 group-hover:brightness-110" style={{ width: `${(val / maxCo) * 100}%` }} />
-                </div>
-              </div>
-            ))}
-            {byCoAll.length === 0 && <div className="text-center py-10 text-text-muted text-xs">Tidak ada data untuk filter ini</div>}
           </div>
         </div>
 
-        <div className={chartBox}>
-          <div className="flex justify-between items-center mb-4 border-b border-border-default pb-2">
-            <div className="text-[15px] font-bold text-text-primary flex items-center gap-2">
-               <Ico d={IC.trend} size={14} color="var(--color-green)" />
-               Status: Revenue & Jumlah
-               <span className="ml-auto text-[11px] font-mono text-text-muted bg-bg-app px-2 py-0.5 rounded border border-border-default">Total: {fPos.length} PO | {fmt(totalRev)}</span>
-            </div>
-            {detailSource?.type?.startsWith('status-') && <button onClick={() => setDetailSource(null)} className="text-[10px] text-brand hover:underline">Clear View</button>}
-          </div>
-          <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-2 custom-scroll">
-            {byStatusAll.map((s) => (
+        <div className="flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-border-default h-full min-h-[440px]">
+          {/* Left Side: Category Pickers */}
+          <div className="w-full lg:w-[350px] p-5 bg-bg-app/5 flex flex-col gap-6">
+            {/* 1. Overdue Category */}
+            <div>
+              <div className="text-[11px] font-bold text-text-secondary uppercase mb-3 px-1 flex items-center justify-between">
+                <span>Pilih Kategori Overdue</span>
+                {overdueBucket.count > 0 && <span className="bg-red text-white px-2 py-0.5 rounded-full text-[9px] animate-pulse">Needs Attention</span>}
+              </div>
               <div 
-                key={s.k} 
-                className={`flex flex-col gap-1.5 p-2 rounded-lg transition-all cursor-pointer hover:bg-bg-app border border-transparent hover:border-border-default hover:shadow-sm group ${detailSource?.type === `status-${s.k}` ? 'bg-bg-app border-brand/30 shadow-sm' : ''}`}
-                onClick={() => handleKPISelect({ id: `status-${s.k}`, label: `Status: ${s.label}`, data: s.raw })}
+                onClick={() => setSelectedBucket(overdueBucket)}
+                className={`p-4 rounded-xl border transition-all cursor-pointer group relative overflow-hidden ${
+                  selectedBucket?.isOverdue 
+                    ? "ring-2 ring-brand border-transparent shadow-md translate-y-[-2px]" 
+                    : "bg-surface border-border-default hover:border-red/40 hover:shadow-sm"
+                }`}
+                style={selectedBucket?.isOverdue ? { background: `linear-gradient(135deg, white, #ef444415)` } : {}}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 max-w-[180px]">
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm transform group-hover:scale-125 transition-transform" style={{ background: s.color }} />
-                    <span className="text-[13px] text-text-secondary truncate font-semibold group-hover:text-brand transition-colors">{s.label}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[11px] font-bold bg-white text-text-secondary border border-border-default px-1.5 py-0.5 rounded shadow-sm group-hover:bg-brand-soft group-hover:text-brand transition-all">{s.count} PO</span>
-                    <span className="text-xs font-extrabold text-text-primary font-mono group-hover:text-brand transition-colors">{fmt(s.revenue)}</span>
-                  </div>
+                <div className="flex justify-between items-start mb-2 relative z-10">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-red">{overdueBucket.label}</span>
+                  <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full transition-colors ${
+                    selectedBucket?.isOverdue ? "bg-red text-white" : "bg-bg-app text-red group-hover:bg-red group-hover:text-white"
+                  }`}>{overdueBucket.count}</span>
                 </div>
-                <div className="h-[6px] bg-bg-app rounded-full overflow-hidden shadow-inner">
-                  <div className="h-full transition-all duration-700 ease-out group-hover:brightness-105" style={{ background: s.color, width: `${(s.revenue / maxStatRev) * 100}%` }} />
+                <div className="text-[20px] font-black text-text-primary relative z-10">
+                  {overdueBucket.count} <span className="text-[12px] font-bold text-text-muted">PO</span>
+                </div>
+                <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <Ico d={IC.warn} size={64} color="var(--color-red)" />
                 </div>
               </div>
-            ))}
-            {byStatusAll.length === 0 && <div className="text-center py-10 text-text-muted text-xs">Tidak ada data untuk filter ini</div>}
+            </div>
+
+            {/* 2. Aging Categories */}
+            <div className="flex-1">
+              <div className="text-[11px] font-bold text-text-secondary uppercase mb-3 px-1">
+                <span>Pilih Kategori Aging</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {agingBuckets.map((b) => (
+                  <div 
+                    key={b.label}
+                    onClick={() => setSelectedBucket(b)}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer group active:scale-[0.97] relative overflow-hidden ${
+                      selectedBucket?.label === b.label && !selectedBucket.isOverdue
+                        ? "ring-2 ring-brand border-transparent shadow-md translate-y-[-1px]" 
+                        : "bg-surface border-border-default hover:border-brand-mid"
+                    }`}
+                    style={selectedBucket?.label === b.label && !selectedBucket.isOverdue ? { background: `linear-gradient(135deg, white, ${b.color}15)` } : {}}
+                  >
+                    <div className="flex justify-between items-start mb-1 relative z-10">
+                      <span className="text-[9px] font-extrabold uppercase" style={{ color: b.color }}>{b.label}</span>
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full transition-colors ${
+                        selectedBucket?.label === b.label && !selectedBucket.isOverdue ? "bg-brand text-white" : "bg-bg-app text-text-secondary"
+                      }`}>{b.count}</span>
+                    </div>
+                    <div className="text-[15px] font-black text-text-primary relative z-10">{b.count} <span className="text-[9px] font-bold text-text-muted">PO</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Side: Detail List (Transition Optimized) */}
+          <div className="flex-1 flex flex-col bg-white">
+            <div className="p-4 border-b border-border-default/50 bg-bg-app/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-bold text-text-primary uppercase tracking-tight">Detail:</span>
+                <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-lg border border-brand/20 text-brand bg-white shadow-sm" style={{ borderColor: selectedBucket?.color + "40", color: selectedBucket?.color }}>{selectedBucket?.label || "Pilih Kategori"}</span>
+              </div>
+              <span className="text-[10px] text-text-muted font-bold bg-bg-app px-2 py-0.5 rounded-md border border-border-default">{selectedBucket?.items?.length || 0} PO</span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scroll min-h-[350px] max-h-[500px]">
+              {selectedBucket?.items && selectedBucket.items.length > 0 ? (
+                <div className="divide-y divide-border-default/40">
+                  {selectedBucket.items.map((p) => (
+                    <div key={p.id} onClick={() => onJump("po", p.id)} className="p-3 hover:bg-brand-soft/30 cursor-pointer transition-colors flex items-center justify-between group">
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-bold text-text-primary group-hover:text-brand font-mono">{p.orderNo}</span>
+                          <SBadge status={p.status} cfg={INIT_PO_STATUS} className="scale-75 origin-left" />
+                        </div>
+                        <div className="text-[11px] text-text-secondary truncate font-medium">{p.company}</div>
+                      </div>
+                      <div className="flex flex-col items-end shrink-0 ml-4">
+                        <span className="text-[11px] font-bold font-mono px-2 py-0.5 rounded-lg border border-border-default bg-bg-app group-hover:border-brand-mid transition-all shadow-sm">
+                          {diffDays(p.orderDate)} hari
+                        </span>
+                        <span className="text-[9px] text-text-muted mt-1">{fmtDate(p.orderDate)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center p-10 text-center text-text-muted">
+                  <Ico d={IC.info} size={32} color="var(--color-border-strong)" className="mb-2 opacity-30" />
+                  <div className="text-sm font-bold">Tidak ada data</div>
+                  <p className="text-[11px] max-w-[200px] mt-1">Gunakan filter global untuk menyesuaikan cakupan data.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-border-default bg-surface-alt/50">
+              <Btn 
+                variant="primary" 
+                className="w-full !py-2.5 !text-[12px] font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all group"
+                onClick={() => {
+                   const bucketLabel = selectedBucket?.label;
+                   if (bucketLabel) {
+                     localStorage.setItem("po-list-colF", JSON.stringify({ aging: [bucketLabel] }));
+                     onJump("po");
+                   }
+                }}
+              >
+                <span>Lihat "{selectedBucket?.label}" di PO List</span>
+                <Ico d={IC.chevR} size={14} className="group-hover:translate-x-1 transition-transform" />
+              </Btn>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Drill-down Detail List (Floating/Pinned at bottom if active) */}
+      {/* Tables/Charts and Drill-down details follow same pattern... */}
       {detailSource && (
-        <div id="drill-section" className="mb-6 bg-surface border border-brand/20 rounded-xl shadow-lg animate-in slide-in-from-bottom duration-300 transition-all">
-          <div className="p-3 border-b border-border-default flex justify-between items-center bg-brand/5 rounded-t-xl gap-4">
-            <div className="flex items-center gap-2 min-w-fit">
-              <div className="w-2 h-4 bg-brand rounded-full"></div>
-              <h3 className="text-sm font-bold text-text-primary uppercase tracking-tight">
-                Detail: {detailSource.label} 
-                <span className="ml-2 text-[10px] bg-brand text-white px-1.5 py-0.5 rounded-full">{drillFiltered.length}</span>
-              </h3>
-            </div>
-            
-            {/* Optional Total Summary for Revenue/Margin */}
-            {(detailSource.type === "revenue" || detailSource.type === "margin" || detailSource.type?.startsWith("status-") || detailSource.type?.startsWith("co-")) && (
-              <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white border border-brand/20 rounded-lg shadow-sm">
-                <span className="text-[10px] font-bold text-text-muted uppercase">Total:</span>
-                <span className="text-[12px] font-extrabold text-brand font-mono">
-                  {fmt(drillFiltered.reduce((acc, p) => {
-                    const po = p.orderNo ? p : pos.find(x => x.id === (p.poId || p.id));
-                    if (!po) return acc;
-                    if (detailSource.type === "margin") return acc + (itemMargin(p) || 0);
-                    const totals = poTotalsMap.get(po.id) || calcPOTotals(po, items);
-                    return acc + totals.total;
-                  }, 0))}
-                </span>
+        <div id="drill-section" className="mb-10 bg-surface border border-brand/20 rounded-xl shadow-lg animate-in slide-in-from-bottom duration-300">
+           <div className="p-3 border-b border-border-default flex justify-between items-center bg-brand/5 rounded-t-xl gap-4">
+              <span className="text-sm font-bold text-text-primary uppercase tracking-tight">Detail: {detailSource.label}</span>
+              <div className="flex-1 max-w-[300px] relative">
+                <Ico d={IC.search} size={12} color="var(--color-text-muted)" className="absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input value={drillSearch} onChange={(e) => setDrillSearch(e.target.value)} placeholder="Filter detail..." className="w-full bg-white border border-border-strong rounded-lg pl-8 pr-3 py-1 text-xs outline-none" />
               </div>
-            )}
-            
-            <div className="flex-1 max-w-[400px] relative">
-              <Ico d={IC.search} size={12} color="var(--color-text-muted)" className="absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input 
-                value={drillSearch}
-                onChange={(e) => setDrillSearch(e.target.value)}
-                placeholder="Cari di list detail..."
-                className="w-full bg-white border border-border-strong rounded-lg pl-8 pr-3 py-1 text-xs outline-none focus:border-brand"
-              />
-            </div>
-
-            <button onClick={() => { setDetailSource(null); setDrillSearch(""); }} className="p-1 hover:bg-bg-app rounded-full shrink-0">
-               <Ico d={IC.close} size={14} color="var(--color-text-muted)" />
-            </button>
-          </div>
-          <div className="max-h-[400px] overflow-y-auto custom-scroll relative bg-white rounded-b-xl border-t border-border-default">
-            <table className="w-full text-left border-collapse">
-              <thead className="sticky top-0 bg-surface-alt shadow-[0_2px_5px_-2px_rgba(0,0,0,0.1)] text-[11px] font-bold text-text-secondary uppercase z-[5]">
-                <tr>
-                  {detailSource.type === "surat-jalan" ? (
-                    <>
-                      <th className="px-5 py-3.5 border-b border-border-default">No. DO</th>
-                      <th className="px-5 py-3.5 border-b border-border-default">No. PO</th>
-                      <th className="px-5 py-3.5 border-b border-border-default">Customer</th>
-                      <th className="px-5 py-3.5 border-b border-border-default">Tgl Kirim</th>
-                      <th className="px-5 py-3.5 border-b border-border-default text-center">Items</th>
-                    </>
-                  ) : detailSource.type === "margin" ? (
-                    <>
-                      <th className="px-5 py-3.5 border-b border-border-default">Item Name</th>
-                      <th className="px-5 py-3.5 border-b border-border-default">PO No</th>
-                      <th className="px-5 py-3.5 border-b border-border-default text-right">Qty</th>
-                      <th className="px-5 py-3.5 border-b border-border-default text-right">Net</th>
-                      <th className="px-5 py-3.5 border-b border-border-default text-right">Margin</th>
-                    </>
-                  ) : (
-                    <>
-                      <th className="px-5 py-3.5 border-b border-border-default">No. Order</th>
-                      <th className="px-5 py-3.5 border-b border-border-default">Perusahaan</th>
-                      <th className="px-5 py-3.5 border-b border-border-default">Tanggal</th>
-                      <th className="px-5 py-3.5 border-b border-border-default text-right">Total</th>
-                      <th className="px-5 py-3.5 border-b border-border-default text-center">Status</th>
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="text-[12px]">
-                {drillFiltered.map((p, idx) => {
-                  if (detailSource.type === "surat-jalan") {
-                    const d = p;
-                    const po = pos.find(x => x.id === d.poId);
+              <button onClick={() => setDetailSource(null)} className="p-1"><Ico d={IC.close} size={14} color="var(--color-text-muted)" /></button>
+           </div>
+           <div className="max-h-[300px] overflow-y-auto custom-scroll bg-white rounded-b-xl">
+             <table className="w-full text-[12px]">
+                <thead className="sticky top-0 bg-surface-alt shadow-sm">
+                  <tr>
+                    <th className="p-3 border-b text-left">No. Order</th>
+                    <th className="p-3 border-b text-left">Perusahaan</th>
+                    <th className="p-3 border-b text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drillFiltered.map(p => {
+                    const po = p.orderNo ? p : pos.find(x => x.id === (p.poId || p.id));
+                    if (!po) return null;
+                    const tot = poTotalsMap.get(po.id)?.total || 0;
                     return (
-                      <tr key={d.id + idx} className="hover:bg-brand-soft/50 cursor-pointer transition-all border-b border-border-default/40 group active:bg-brand-soft" onClick={() => onJump("po", d.poId)}>
-                        <td className="px-5 py-3 font-bold text-brand group-hover:underline">{d.doNo}</td>
-                        <td className="px-5 py-3 font-mono text-text-secondary">{po?.orderNo || "–"}</td>
-                        <td className="px-5 py-3 text-text-secondary font-medium truncate max-w-[200px]">{po?.company || "–"}</td>
-                        <td className="px-5 py-3 text-text-muted font-mono">{d.deliveryDate}</td>
-                        <td className="px-5 py-3 text-center">
-                           <span className="bg-surface-alt border border-border-default px-2 py-0.5 rounded text-[10px] font-bold text-text-secondary group-hover:bg-brand group-hover:text-white transition-colors">{d.lines?.length || 0}</span>
-                        </td>
+                      <tr key={po.id} className="border-b hover:bg-bg-app cursor-pointer" onClick={() => onJump("po", po.id)}>
+                        <td className="p-3 font-mono font-bold text-brand">{po.orderNo}</td>
+                        <td className="p-3 text-text-secondary">{po.company}</td>
+                        <td className="p-3 text-right font-mono font-bold">{fmt(tot)}</td>
                       </tr>
                     );
-                  }
-                  if (detailSource.type === "margin") {
-                    const item = p;
-                    const po = pos.find(x => x.id === item.poId);
-                    const mg = itemMargin(item);
-                    return (
-                      <tr key={item.id + idx} className="hover:bg-brand-soft/50 cursor-pointer transition-all border-b border-border-default/40 group active:bg-brand-soft" onClick={() => onJump("po", item.poId)}>
-                        <td className="px-5 py-3 font-bold text-text-primary group-hover:text-brand transition-colors">{item.itemName}</td>
-                        <td className="px-5 py-3 font-mono text-brand font-semibold">{po?.orderNo || "–"}</td>
-                        <td className="px-5 py-3 text-right font-mono text-text-secondary">{item.qty} {item.unit}</td>
-                        <td className="px-5 py-3 text-right font-bold font-mono text-text-primary">{fmt(itemNet(item))}</td>
-                        <td className={`px-5 py-3 text-right font-bold font-mono ${mg >= 0 ? "text-green" : "text-red"}`}>
-                           <div className="flex items-center justify-end gap-1">
-                             {mg < 0 && <Ico d={IC.warn} size={11} />}
-                             {fmt(mg)}
-                           </div>
-                        </td>
-                      </tr>
-                    );
-                  }
-
-                  const po = p.orderNo ? p : pos.find(x => x.id === (p.poId || p.id));
-                  if (!po) return null;
-                  const totals = poTotalsMap.get(po.id) || calcPOTotals(po, items);
-                  return (
-                    <tr 
-                      key={po.id + idx} 
-                      className="hover:bg-brand-soft/50 cursor-pointer transition-all border-b border-border-default/40 group active:bg-brand-soft"
-                      onClick={() => onJump("po", po.id)}
-                    >
-                      <td className="px-5 py-3 font-bold text-text-primary group-hover:text-brand transition-colors font-mono">{po.orderNo}</td>
-                      <td className="px-5 py-3 text-text-secondary font-medium truncate max-w-[250px]" title={po.company}>{po.company}</td>
-                      <td className="px-5 py-3 text-text-muted font-mono">{po.orderDate}</td>
-                      <td className="px-5 py-3 text-right font-bold text-brand font-mono text-[13px]">{fmt(totals.total)}</td>
-                      <td className="px-5 py-3 text-center">
-                        <div className="scale-90 origin-center inline-block">
-                          <SBadge status={po.status} cfg={INIT_PO_STATUS} />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  })}
+                </tbody>
+             </table>
+           </div>
         </div>
       )}
 
-      {/* Alerts */}
-      <div className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
-        {/* Overdue Alert with Threshold Selector */}
-        <div className="bg-amber-soft/40 border border-amber-mid/30 rounded-xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-amber/10 rounded-lg flex items-center justify-center">
-                <Ico d={IC.warn} size={16} color="var(--color-amber)" />
-              </div>
-              <span className="text-[15px] font-bold text-amber">Overdue ({overduePOs.length})</span>
-            </div>
-            <select 
-              value={overdueThreshold} 
-              onChange={(e) => setOverdueThreshold(Number(e.target.value))}
-              className="bg-bg-app border border-amber/20 text-amber text-[10px] font-bold rounded-md px-2 py-1 outline-none cursor-pointer"
-            >
-              {[7, 14, 24, 31].map(v => <option key={v} value={v}>&gt;= {v} hari</option>)}
-            </select>
+      {/* Row of Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-10">
+        <div className={chartBox}>
+          <div className="font-bold text-sm mb-4 border-b pb-2 flex justify-between">
+             <span>Revenue per Perusahaan</span>
+             <span className="text-[10px] font-mono text-text-muted">{fmt(totalRev)}</span>
           </div>
-          <div className="space-y-2">
-            {overduePOs.slice(0, 5).map((p) => (
-              <div key={p.id} onClick={() => onJump("po", p.id)} className={`${alertRow} hover:bg-warning-soft bg-surface border border-transparent hover:border-amber/20 transition-all`}>
-                <div className="flex flex-col overflow-hidden">
-                  <div className="text-[13px] font-bold truncate text-text-primary">{p.orderNo}</div>
-                  <div className="text-[11px] text-text-secondary truncate">{p.company}</div>
+          <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-2 custom-scroll">
+            {byCoAll.map(([co, val]) => (
+              <div key={co} className="group cursor-pointer" onClick={() => handleKPISelect({ id: `co-${co}`, label: co, data: fPos.filter(p => p.company === co) })}>
+                <div className="flex justify-between items-end mb-1">
+                  <span className="text-[12px] truncate max-w-[200px] font-medium">{co}</span>
+                  <span className="text-[12px] font-bold font-mono">{fmt(val)}</span>
                 </div>
-                <span className="text-[11px] font-bold font-mono text-amber bg-warning-soft border border-amber/10 rounded-lg px-2 py-1 shadow-sm shrink-0">
-                  {diffDays(p.orderDate)} hari
-                </span>
+                <div className="h-[6px] bg-bg-app rounded-full overflow-hidden shadow-inner">
+                  <div className="h-full bg-brand rounded-full transition-all duration-500" style={{ width: `${(val / (byCoAll[0]?.[1] || 1)) * 100}%` }} />
+                </div>
               </div>
             ))}
-            {overduePOs.length > 5 && (
-              <button onClick={() => onJump("po")} className="w-full py-2 text-[10px] font-bold text-amber hover:bg-amber/10 rounded-lg border border-dashed border-amber/30 transition-all">
-                + {overduePOs.length - 5} lainnya (Lihat Semua)
-              </button>
-            )}
-            {overduePOs.length === 0 && <div className="text-center py-4 text-text-muted text-xs italic">Tidak ada PO yang overdue pada periode ini</div>}
           </div>
         </div>
-
-        {urgentPOs.length > 0 && (
-          <div className="bg-red-soft/40 border border-red-mid/30 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-7 h-7 bg-red/10 rounded-lg flex items-center justify-center">
-                <Ico d={IC.fire} size={16} color="var(--color-red)" />
-              </div>
-              <span className="text-[15px] font-bold text-red">Urgent ({urgentPOs.length})</span>
-            </div>
-            <div className="space-y-2">
-              {urgentPOs.slice(0, 5).map((p) => (
-                <div key={p.id} onClick={() => onJump("po", p.id)} className={`${alertRow} hover:bg-danger-soft bg-surface border border-transparent hover:border-red/20 transition-all`}>
-                  <div className="flex flex-col overflow-hidden">
-                    <div className="text-[13px] font-bold truncate text-text-primary">{p.orderNo}</div>
-                    <div className="text-[11px] text-text-secondary truncate">{p.company}</div>
+        <div className={chartBox}>
+          <div className="font-bold text-sm mb-4 border-b pb-2">Status Analysis</div>
+          <div className="space-y-3.5">
+            {byStatusAll.map(s => (
+               <div key={s.k} className="flex items-center justify-between p-2 rounded-lg hover:bg-bg-app cursor-pointer border border-transparent hover:border-border-default" onClick={() => handleKPISelect({ id: `st-${s.k}`, label: s.label, data: s.raw })}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+                    <span className="text-[12px] font-medium">{s.label}</span>
                   </div>
-                  <div className="shrink-0 scale-90 origin-right">
-                    <SBadge status={p.status} cfg={INIT_PO_STATUS} />
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold bg-white border px-1.5 py-0.5 rounded shadow-sm">{s.count} PO</span>
+                    <span className="text-xs font-bold font-mono text-brand">{fmt(s.revenue)}</span>
                   </div>
-                </div>
-              ))}
-              {urgentPOs.length > 5 && (
-                <button onClick={() => onJump("po")} className="w-full py-2 text-[10px] font-bold text-red hover:bg-red/10 rounded-lg border border-dashed border-red/30 transition-all">
-                  + {urgentPOs.length - 5} lainnya (Lihat Semua)
-                </button>
-              )}
-            </div>
+               </div>
+            ))}
           </div>
-        )}
-
-        {incompletePOs.length > 0 && (
-          <div className="bg-orange-soft/40 border border-orange-mid/30 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-7 h-7 bg-orange-dark/10 rounded-lg flex items-center justify-center">
-                <Ico d={IC.warn} size={16} color="var(--color-orange-dark)" />
-              </div>
-              <span className="text-[15px] font-bold text-orange-dark">Info Parsial ({incompletePOs.length})</span>
-            </div>
-            <div className="space-y-2">
-              {incompletePOs.slice(0, 5).map((p) => {
-                const missing = [];
-                if (!p.orderNo?.trim() || p.orderNo.trim() === "Order") missing.push("No. PO");
-                if (!p.orderDate || p.orderDate === "dd/mm/yyyy") missing.push("Tanggal");
-                return (
-                  <div key={p.id} onClick={() => onJump("po", p.id)} className={`${alertRow} hover:bg-orange-mid/10 bg-surface border border-transparent hover:border-orange-dark/20 transition-all`}>
-                    <div className="flex flex-col overflow-hidden">
-                      <div className="text-[13px] font-bold truncate text-text-primary">{p.orderNo || "(No. kosong)"}</div>
-                      <div className="text-[11px] truncate text-orange-dark/70 font-medium">{missing.join(", ") || "Info tidak detail"}</div>
-                    </div>
-                    <div className="shrink-0 text-[10px] font-extrabold uppercase bg-orange-soft text-orange-dark px-2 py-1 rounded-lg border border-orange-dark/10">Pending</div>
-                  </div>
-                );
-              })}
-              {incompletePOs.length > 5 && (
-                <button onClick={() => onJump("po")} className="w-full py-2 text-[10px] font-bold text-orange-dark hover:bg-orange-dark/10 rounded-lg border border-dashed border-orange-dark/30 transition-all">
-                  + {incompletePOs.length - 5} lainnya (Lihat Semua)
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

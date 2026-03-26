@@ -3,7 +3,7 @@ import { Btn, Ico, IC, TagChip, SBadge, FIn, FSel } from "../components/ui";
 import { SupplierFormModal } from "../components/forms";
 import { useConfirm } from "../hooks";
 import { usePOStore } from "../store/usePOStore";
-import { itemNet, fmt, fmtShort } from "../lib/helpers";
+import { itemNet, fmt, fmtShort, buildPoMap } from "../lib/helpers";
 import { ITEM_STATUS } from "../lib/constants";
 import { thCls, tdCls } from "../lib/tableStyles";
 
@@ -35,11 +35,7 @@ export function SupplierPage({ onJump }) {
   );
   const allTags = [...new Set(suppliers.flatMap((s) => s.tags || []))].sort();
 
-  const poById = useMemo(() => {
-    const map = {};
-    pos.forEach((p) => { map[p.id] = p; });
-    return map;
-  }, [pos]);
+  const poById = useMemo(() => buildPoMap(pos), [pos]);
 
   const supItems = (id) => items.filter((i) => (i.supplierAssignments || []).some((a) => a.supplierId === id));
   const supAsgn  = (item, supId) => (item.supplierAssignments || []).find((a) => a.supplierId === supId);

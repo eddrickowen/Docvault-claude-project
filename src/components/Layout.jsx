@@ -5,7 +5,9 @@
 import { useState, useEffect } from "react";
 import { Ico, IC, Btn } from "./ui";
 import { usePOStore } from "../store/usePOStore";
-import { VENDOR_NAME } from "../lib/constants";
+import { ChatWidget } from "./chat/ChatWidget";
+import { ChatSettingsModal } from "./chat/ChatSettingsModal";
+import { VENDOR_NAME, APP_VERSION } from "../lib/constants";
 import { isIncompletePO, today } from "../lib/helpers";
 
 const NAV = [
@@ -29,6 +31,7 @@ export function Layout({ view, setView, onJump, onLogout, children }) {
   const [hideIncAlert, setHideIncAlert] = useState(false);
   const [sharing, setSharing] = useState({ active: false, url: "" });
   const [isToggling, setIsToggling] = useState(false);
+  const [showChatSettings, setShowChatSettings] = useState(false);
 
   const todayStr    = today();
   const overduePOs  = pos.filter((p) => {
@@ -229,7 +232,7 @@ export function Layout({ view, setView, onJump, onLogout, children }) {
             {!sideCollapsed && (
               <div>
                 <div className="text-[13px] font-black text-slate-50 tracking-wider">PO MANAGER</div>
-                <div className="text-sm text-slate-500">v6.6</div>
+                <div className="text-sm text-slate-500">v{APP_VERSION}</div>
               </div>
             )}
             <Btn
@@ -348,6 +351,14 @@ export function Layout({ view, setView, onJump, onLogout, children }) {
           </div>
         </div>
       </div>
+
+      {/* ── Chat Widget ── */}
+      <ChatWidget onOpenSettings={() => setShowChatSettings(true)} />
+
+      {/* ── Chat Settings Modal ── */}
+      {showChatSettings && (
+        <ChatSettingsModal onClose={() => setShowChatSettings(false)} />
+      )}
     </div>
   );
 }

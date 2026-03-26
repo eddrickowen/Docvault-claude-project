@@ -100,7 +100,13 @@ export const usePOStore = create((set, get) => ({
   /* ── Init: load all data from PocketBase ── */
   init: async () => {
     try {
-      logger.log('🔄 Loading data from PocketBase...');
+      if (!pb.authStore.isValid) {
+        logger.warn('⚠️ Initialization skipped: Not authenticated.');
+        return;
+      }
+
+      const userId = pb.authStore.model?.id;
+      logger.log(`🔄 Loading data from PocketBase for user: ${userId}...`);
 
       // Load all collections in parallel for faster initial load
       const [
@@ -142,7 +148,13 @@ export const usePOStore = create((set, get) => ({
         uom = uomResult.value || UOM_OPTIONS;
       }
 
-      logger.log('✅ Data loaded:', { pos: pos.length, items: items.length, suppliers: suppliers.length });
+      logger.log('✅ Data load complete:', { 
+        pos: pos.length, 
+        items: items.length, 
+        suppliers: suppliers.length,
+        companies: companies.length,
+        zoneTypes: zoneTypes.length
+      });
 
       set({
         pos,
@@ -158,6 +170,7 @@ export const usePOStore = create((set, get) => ({
       });
 
       // Subscribe to real-time updates
+      get()._unsubscribeRealtime(); // Ensure no duplicates
       get()._subscribeToRealtime();
 
     } catch (error) {
@@ -241,6 +254,14 @@ export const usePOStore = create((set, get) => ({
     });
 
     logger.log('✅ Real-time subscriptions active');
+  },
+
+  _unsubscribeRealtime: () => {
+    logger.log('🔕 Unsubscribing from all real-time events...');
+    pb.collection('pos').unsubscribe().catch(() => {});
+    pb.collection('items').unsubscribe().catch(() => {});
+    pb.collection('suppliers').unsubscribe().catch(() => {});
+    pb.collection('dos').unsubscribe().catch(() => {});
   },
 
   /* ── Toast ── */
@@ -459,14 +480,13 @@ export const usePOStore = create((set, get) => ({
     try {
       get()._saveToHistory(`Hapus ${ids.length} PO (Bulk)`);
       
-      // Call the custom backend endpoint for efficient SQL deletion
+      get()._unsubscribeRealtime(); // Prevent event storm
       const response = await pb.send("/api/bulk-delete", {
         method: "POST",
-        body: { ids } // Let SDK handle stringify and headers
+        body: { ids }
       });
 
       if (response.success) {
-        // Update local state instantly by filtering out the deleted IDs
         const idSet = new Set(ids);
         set((s) => ({
           pos: s.pos.filter(p => !idSet.has(p.id)),
@@ -480,6 +500,35 @@ export const usePOStore = create((set, get) => ({
     } catch (error) {
       console.error('Failed to bulk delete POs:', error);
       get().toast('⚠️ Gagal menghapus PO secara massal: ' + error.message);
+    } finally {
+      get()._subscribeToRealtime(); // Re-enable
+    }
+  },
+
+  bulkImportPOs: async (importPayload) => {
+    const poCount = importPayload.pos?.length || 0;
+    if (!importPayload || poCount === 0) return;
+    try {
+      get().toast(`🔄 Mengimpor ${poCount} PO secara massal...`);
+      
+      get()._unsubscribeRealtime(); // CRITICAL: Stop the UI freeze from thousands of RT events
+      
+      const response = await pb.send("/api/bulk-import", {
+        method: "POST",
+        body: importPayload
+      });
+
+      if (response.success) {
+        await get().init();
+        get().toast(`✓ Berhasil mengimpor ${response.createdPOs} PO dan ${response.createdItems} item.`);
+      } else {
+        throw new Error(response.error || "Gagal mengimpor data");
+      }
+    } catch (error) {
+      console.error('Failed to bulk import POs:', error);
+      get().toast('⚠️ Gagal mengimpor secara massal: ' + error.message);
+      get()._subscribeToRealtime(); // Re-enable on error
+      throw error;
     }
   },
 
@@ -729,6 +778,17 @@ export const usePOStore = create((set, get) => ({
       set({ settings });
     } catch (error) {
       console.error('Failed to save settings:', error);
+    }
+  },
+
+  updateSettings: async (updates) => {
+    try {
+      const newSettings = { ...get().settings, ...updates };
+      await get().saveSettings(newSettings);
+      return true;
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      return false;
     }
   },
 

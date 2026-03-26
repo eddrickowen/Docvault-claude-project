@@ -1,7 +1,33 @@
 {
   "permissions": {
     "allow": [
-      "Bash(del \"c:\\Users\\Eddri\\Music\\docvault\\src\\components\\ErrorBoundary.jsx\")"
+      "Bash(del \"c:\\Users\\Eddri\\Music\\docvault\\src\\components\\ErrorBoundary.jsx\")",
+      "Bash(dir /b srccomponentsui)",
+      "Bash(tasklist)",
+      "Bash(findstr /i \"pocketbase\")",
+      "Bash(findstr /i \"pocket\")",
+      "Bash(tasklist /FI \"IMAGENAME eq pocketbase.exe\")",
+      "Bash(dir /b srccomponentschat)",
+      "Bash(test -f \"d:\\BACKUP INUL WINDOWS (2026)\\Music\\docvault\\src\\components\\ErrorBoundary.jsx\")",
+      "Bash(npm run dev)",
+      "Bash(cat src/components/ui/Icon.jsx)",
+      "Bash(taskkill /F /IM pocketbase.exe)",
+      "Bash(powershell -Command \"Start-Process cmd -ArgumentList ''/c start-pocketbase.bat''\")",
+      "Bash(sqlite3 data.db)",
+      "Bash(./pocketbase.exe admin create admin@docvault.local)",
+      "Bash(./pocketbase.exe --help)",
+      "Bash(./pocketbase.exe superuser --help)",
+      "Bash(./pocketbase.exe superuser update admin@docvault.local)",
+      "Bash(./pocketbase.exe superuser upsert admin@docvault.local admin123)",
+      "Bash(cat pocketbase.log)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(head:*)",
+      "Bash(tail -c 200 \"D:/BACKUP INUL WINDOWS \\(2026\\)/Music/docvault/PURCHASE_ORDER_LIST v3.2 \\(belum di normalisasi\\) - PO_ITEM_LIST.tsv\")",
+      "Bash(tail -c 200 \"D:/BACKUP INUL WINDOWS \\(2026\\)/Music/docvault/src/PURCHASE_ORDER_LIST v3.2 \\(belum di normalisasi\\) - PO_ITEM_LIST.csv\")",
+      "Bash(cd:*)",
+      "Bash(npx vite:*)"
     ],
     "deny": [],
     "ask": []

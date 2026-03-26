@@ -3,20 +3,22 @@ import { usePOStore } from "../store/usePOStore";
 
 /* ── ID & Date ── */
 export const uid = () => {
-  // Use crypto.randomUUID() for better collision resistance
-  // Fallback to timestamp + random for older browsers
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
+  // PocketBase expects exactly 15 alphanumeric characters
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let res = '';
+  for (let i = 0; i < 15; i++) {
+    res += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  // Fallback: timestamp + random (36-char base)
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 11);
+  return res;
 };
 export const today = () => new Date().toISOString().slice(0, 10);
 export const diffDays = (d) => (d ? Math.floor((Date.now() - new Date(d)) / 864e5) : -1);
 
 /* ── PO Checks ── */
+// Overdue: Date > threshold AND status is ACTIVE (not terminal or draft)
 export const isOverdue = (p, days = 7) =>
-  ["pending", "confirmed"].includes(p.status) && p.orderDate && diffDays(p.orderDate) > days;
+  !["received", "paid", "cancelled"].includes(p.status) && 
+  p.orderDate && diffDays(p.orderDate) >= days;
 export const isIncompletePO = (p) =>
   !p.orderNo || !p.orderNo.trim() || p.orderNo.trim() === "Order" ||
   !p.orderDate || p.orderDate === "dd/mm/yyyy" || !p.company || !p.company.trim();
@@ -57,35 +59,6 @@ export const parseIDR = (s) => {
   }
 };
 
-export const parseCSV = (text, delimiter = ',') => {
-  const res = [];
-  let row = [];
-  let cur = "";
-  let inQ = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQ) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { cur += '"'; i++; }
-        else { inQ = false; }
-      } else { cur += c; }
-    } else {
-      if (c === '"') { inQ = true; }
-      else if (c === delimiter) { row.push(cur.trim()); cur = ""; }
-      else if (c === '\n' || c === '\r') {
-        if (c === '\r' && text[i + 1] === '\n') i++;
-        row.push(cur.trim());
-        if (row.length > 1 || row[0] !== "") res.push(row);
-        row = []; cur = "";
-      } else { cur += c; }
-    }
-  }
-  if (cur || row.length > 0) {
-    row.push(cur.trim());
-    if (row.length > 1 || row[0] !== "") res.push(row);
-  }
-  return res;
-};
 export const parseSmartDate = (raw) => {
   if (!raw || !raw.trim()) return "";
   const s = raw.trim();
@@ -134,6 +107,13 @@ export const nextInvSeq = (items) => {
     return Number(parts[0]);
   }).filter(n => !isNaN(n));
   return nums.length ? Math.max(...nums) + 1 : 1600;
+};
+
+/* ── Map Builders ── */
+export const buildPoMap = (pos) => {
+  const map = {};
+  (pos || []).forEach((p) => { map[p.id] = p; });
+  return map;
 };
 
 /* ── Quantity Helpers ── */
@@ -239,8 +219,23 @@ export const getPOProgress = (poId, items) => {
 };
 
 /* ── Visual Helpers ── */
-export const agingColor = (d) => (d < 0 ? "#64748b" : d < 30 ? "#059669" : d < 60 ? "#d97706" : "#dc2626");
-export const agingBg = (d) => (d < 0 ? "#f1f5f9" : d < 30 ? "#f0fdf4" : d < 60 ? "#fffbeb" : "#fef2f2");
+export const agingColor = (d) => (d < 0 ? "#64748b" : d < 3 ? "#059669" : d < 7 ? "#10b981" : d < 14 ? "#fbbf24" : d < 24 ? "#f59e0b" : d < 31 ? "#ea580c" : "#dc2626");
+export const agingBg = (d) => (d < 0 ? "#f1f5f9" : d < 3 ? "#f0fdf4" : d < 7 ? "#ecfdf5" : d < 14 ? "#fffbeb" : d < 24 ? "#fff7ed" : d < 31 ? "#fff2e7" : "#fef2f2");
+
+export const getAgingBucketsConfig = () => [
+  { min: 0,  max: 3,  label: "0-3 Hari",  color: "#059669" },
+  { min: 3,  max: 7,  label: "3-7 Hari",  color: "#10b981" },
+  { min: 7,  max: 14, label: "7-14 Hari", color: "#fbbf24" },
+  { min: 14, max: 24, label: "14-24 Hari", color: "#f59e0b" },
+  { min: 24, max: 31, label: "24-31 Hari", color: "#ea580c" },
+  { min: 31, max: Infinity, label: "> 31 Hari", color: "#dc2626" },
+];
+
+export const getAgingBucket = (days) => {
+  if (days < 0) return null;
+  const config = getAgingBucketsConfig();
+  return config.find(b => days >= b.min && days < b.max) || config[config.length - 1];
+};
 
 /* ── Filter Helpers ── */
 export const applyDateFilter = (val, f) => {

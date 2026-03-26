@@ -96,13 +96,24 @@ export function Login({ onLoginSuccess }) {
         </form>
 
         {/* Helper Text */}
-        <div className="mt-6 text-center">
-          <p className="text-xs text-text-muted">
-            Default credentials: admin@docvault.local / admin123
-          </p>
-          <p className="text-xs text-text-muted mt-1">
-            (Change password in PocketBase Admin UI)
-          </p>
+        <div className="mt-8 text-center space-y-4">
+          <div className="p-3 bg-slate-900/50 rounded-lg border border-slate-800">
+            <p className="text-[11px] text-slate-500 uppercase tracking-widest font-bold mb-2">Default Credentials</p>
+            <p className="text-sm text-slate-300 font-mono">admin.api@gmail.com</p>
+            <p className="text-sm text-slate-300 font-mono">admin123!45</p>
+          </div>
+          
+          <button 
+            type="button"
+            onClick={() => {
+              localStorage.clear();
+              window.pb?.authStore?.clear();
+              window.location.reload();
+            }}
+            className="text-[10px] text-slate-600 hover:text-brand transition-colors uppercase font-bold tracking-tighter"
+          >
+            ⚠️ Hard Reset Browser Session
+          </button>
         </div>
       </div>
     </div>

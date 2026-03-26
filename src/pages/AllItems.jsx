@@ -6,7 +6,7 @@ import { useConfirm, useDataTable } from "../hooks";
 import { usePOStore } from "../store/usePOStore";
 import {
   itemNet, itemMargin, itemBuy, getQtyDel, fmtDate, fmtShort, fmt, today,
-  exportCSV, copyTSV, applyDateFilter, applyNumFilter, applyTextFilter,
+  exportCSV, copyTSV, applyDateFilter, applyNumFilter, applyTextFilter, buildPoMap,
 } from "../lib/helpers";
 import { fuzzySearchItems } from "../lib/fuzzySearch";
 import { ITEM_STATUS, INIT_PO_STATUS, PAGE_SIZE, DEFAULT_EXCEL_ITEM_COLS } from "../lib/constants";
@@ -23,20 +23,14 @@ export function AllItems({ onJump }) {
     return () => window.removeEventListener("keydown", handleEsc);
   }, []);
 
-  const poById = useMemo(() => {
-    const map = {};
-    (pos || []).forEach((p) => {
-      map[p.id] = p;
-    });
-    return map;
-  }, [pos]);
+  const poById = useMemo(() => buildPoMap(pos), [pos]);
 
   const {
     search, setSearch, page, setPage, perPage, setPerPage,
     colF, setColF, dateF, setDateF, numF, setNumF, textF, setTextF,
     sort, toggleSort, bulkSel, setBulkSel, clearBulk,
     hasFilters, resetFilters, getPaged
-  } = useDataTable("itemName", "asc", PAGE_SIZE);
+  } = useDataTable("itemName", "asc", PAGE_SIZE, "all-items");
 
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [editItem,    setEditItem]    = useState(null);
@@ -229,6 +223,15 @@ export function AllItems({ onJump }) {
     { col: "deliveryDate",label: "Delivery",          ft: "date", fk: "deliveryDate" },
     { col: "invoiceNo",   label: "Invoice",           ft: "text", fk: "invoiceNo"    },
     { col: "zoneType",    label: "Zone",              ft: "col"                      },
+    { col: "aging",       label: "Aging",             ft: null, labelFn: (i) => {
+        const po = poById[i.poId];
+        if (!po || po.status === "paid" || po.status === "cancelled") return <span className="text-[10px] text-text-muted">–</span>;
+        const days = diffDays(po.orderDate);
+        return days >= 0 ? (
+          <span className="text-[11px] font-bold px-[7px] py-0.5 rounded-[5px] whitespace-nowrap" style={{ color: agingColor(days), background: agingBg(days) }}>{days}h</span>
+        ) : <span className="text-[10px] text-text-muted">–</span>;
+      }
+    },
     { col: "notes",       label: "Note",              ft: "text", fk: "notes"        },
     {
       col: "poNo",

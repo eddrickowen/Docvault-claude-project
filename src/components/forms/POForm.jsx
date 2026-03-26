@@ -3,7 +3,7 @@ import { Modal, Btn, Ico, IC, FGrid, FF, FIn, FTa, FSel, NumInput, Divider, SBad
 import { SmartDate } from "../shared";
 import { ItemForm } from "./ItemForm";
 import { uid, today, fmt, itemNet, itemBuy } from "../../lib/helpers";
-import { INIT_PO_STATUS, ITEM_STATUS, mkItem } from "../../lib/constants";
+import { INIT_PO_STATUS, ITEM_STATUS, mkItem, PPN_RATE } from "../../lib/constants";
 
 /**
  * POForm — create or edit a PO header + its line items.
@@ -24,15 +24,16 @@ export function POForm({ initial, companies, items, suppliers, dos, zoneTypes, s
   const set = (k) => (v) => setF((p) => ({ ...p, [k]: v }));
 
   // Compute totals directly from draftItems (bypass poId filter for new POs)
+  const rate = typeof settings?.ppnRate !== 'undefined' ? Number(settings.ppnRate) : PPN_RATE;
   const tots = useMemo(() => {
     if (f.totalLocked) {
       const ex = Number(f.manualExPPN) || 0;
-      const ppn = Number(f.manualPPN) || Math.round(ex * 0.11);
+      const ppn = Number(f.manualPPN) || Math.round(ex * rate);
       return { exPPN: ex, ppn, total: ex + ppn };
     }
     const ex = draftItems.reduce((s, i) => s + itemNet(i), 0);
-    return { exPPN: ex, ppn: Math.round(ex * 0.11), total: Math.round(ex * 1.11) };
-  }, [f, draftItems]);
+    return { exPPN: ex, ppn: Math.round(ex * rate), total: Math.round(ex * (1 + rate)) };
+  }, [f, draftItems, rate]);
 
   const handleSave = () => {
     if (!f.company.trim() || !f.orderDate) return;
@@ -112,7 +113,7 @@ export function POForm({ initial, companies, items, suppliers, dos, zoneTypes, s
             <FF label="Total Ex PPN (Rp)">
               <NumInput value={f.manualExPPN || 0} onChange={set("manualExPPN")} min={0} />
             </FF>
-            <FF label={`PPN (Rp) · 11% = ${fmt(Math.round((f.manualExPPN || 0) * 0.11))}`}>
+            <FF label={`PPN (Rp) · ${(rate * 100).toFixed(0)}% = ${fmt(Math.round((f.manualExPPN || 0) * rate))}`}>
               <NumInput value={f.manualPPN || 0} onChange={set("manualPPN")} min={0} />
             </FF>
           </>

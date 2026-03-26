@@ -5,8 +5,9 @@ import { Btn } from "../ui";
  */
 export function Pagination({ total, page, perPage, onChange, perPageOptions, onPerPageChange }) {
   const isAll = perPage === "All";
-  const perPageNum = isAll ? total : (perPage || 50);
-  const pages = isAll ? 1 : Math.ceil(total / perPageNum);
+  const perPageNum = isAll ? (total || 1) : (Number(perPage) || 50);
+  const totalSafe = Number(total) || 0;
+  const pages = isAll ? 1 : Math.ceil(totalSafe / perPageNum) || 1;
   
   // Return early if no pagination needed AND no page-size selector was requested
   if (pages <= 1 && !perPageOptions) return null;

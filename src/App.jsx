@@ -4,12 +4,14 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { usePOStore } from "./store/usePOStore";
+import { useChatStore } from "./store/useChatStore";
 import { Layout } from "./components/Layout";
 import { Login } from "./components/Login";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { useToast } from "./hooks";
 import { pb, isAuthenticated } from "./lib/pocketbase";
 import { logger } from "./lib/logger";
+import { APP_VERSION } from "./lib/constants";
 import {
   Dashboard,
   POList,
@@ -22,6 +24,7 @@ import {
 
 export default function App() {
   const { init, _loaded, _toast, setJumpTargetPO } = usePOStore();
+  const { init: initChat } = useChatStore();
   const [view, setView] = useState("dashboard");
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -33,12 +36,13 @@ export default function App() {
       if (isAuthenticated()) {
         setAuthenticated(true);
         init(); // Load data if already authenticated
+        initChat(); // Initialize chat store
       }
       setCheckingAuth(false);
     };
 
     checkAuth();
-  }, [init]);
+  }, [init, initChat]);
 
   /* ── Bridge store toast → useToast UI ── */
   useEffect(() => {
@@ -70,6 +74,7 @@ export default function App() {
     logger.log('✅ User logged in:', user.email);
     setAuthenticated(true);
     init(); // Load data after login
+    initChat(); // Initialize chat store
   };
 
   /* ── Handle logout ── */
@@ -87,7 +92,7 @@ export default function App() {
           <div className="loading-spinner" />
           <div>
             <div className="text-white text-sm font-black tracking-wider">DOCVAULT</div>
-            <div className="text-slate-500 text-xs font-medium">v7.0 PocketBase</div>
+            <div className="text-slate-500 text-xs font-medium">v{APP_VERSION} PocketBase</div>
           </div>
         </div>
         <span className="text-slate-500 text-xs font-medium animate-pulse">Checking authentication…</span>
@@ -108,7 +113,7 @@ export default function App() {
           <div className="loading-spinner" />
           <div>
             <div className="text-white text-sm font-black tracking-wider">DOCVAULT</div>
-            <div className="text-slate-500 text-xs font-medium">v7.0 PocketBase</div>
+            <div className="text-slate-500 text-xs font-medium">v{APP_VERSION} PocketBase</div>
           </div>
         </div>
         <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden">

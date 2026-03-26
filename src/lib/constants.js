@@ -1,5 +1,7 @@
 /* ══ Application Constants ══════════════════════════════════════ */
 
+export const APP_VERSION = "9.3";
+
 export const VENDOR_NAME = "PT. API DISTRIBUSI INDONESIA";
 export const VENDOR_ADDR = "Jl. Industri Raya No.123, Medan, Sumatera Utara";
 export const VENDOR_CONTACT = "Tel: +62-61-XXXX-XXXX  |  po@apidistribusi.co.id";

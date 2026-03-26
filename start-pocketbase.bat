@@ -8,7 +8,7 @@ echo Press Ctrl+C to stop the server
 echo.
 
 REM Change this path to where you extracted PocketBase
-cd /d C:\pocketbase
+cd /d "%~dp0pocketbase"
 
 REM Start PocketBase
 pocketbase.exe serve --http="0.0.0.0:8090"

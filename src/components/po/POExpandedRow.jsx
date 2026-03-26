@@ -13,11 +13,10 @@ import { calcPOTotals, fmt, itemNet, itemMargin, copyTSV } from "../../lib/helpe
 import { ITEM_STATUS, DEFAULT_EXCEL_ITEM_COLS } from "../../lib/constants";
 import { buildItemRowsByIds, getEnabledColumns } from "../../lib/exportHelpers";
 import { mergeSupplierAssignments } from "../../lib/supplierHelpers";
+import { stickyL, stickyR } from "../../lib/tableStyles";
 
 const thCls   = "py-2 px-2 text-[11px] font-extrabold text-text-secondary text-left whitespace-nowrap border-b border-border-strong uppercase tracking-[.05em] bg-surface-alt cursor-pointer select-none sticky top-0 z-[10]";
 const tdCls   = "py-2 px-2 border-b border-border-default text-[12px] align-middle";
-const stickyL = "sticky left-0 z-[1] shadow-[3px_0_6px_rgba(0,0,0,0.05)]";
-const stickyR = "sticky right-0 z-[1] shadow-[-3px_0_6px_rgba(0,0,0,0.05)]";
 
 export function POExpandedRow({
   po,

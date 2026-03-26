@@ -1,28 +1,71 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { usePOStore } from "../store/usePOStore";
+import { usePersist } from "./usePersist";
 
-export function useDataTable(initialSortCol = "", initialSortDir = "asc", defaultPerPage = 50) {
+export function useDataTable(initialSortCol = "", initialSortDir = "asc", defaultPerPage = 50, persistenceKey = null) {
   const settings = usePOStore((state) => state.settings);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(settings?.paginationSize || defaultPerPage);
-  const [colF, setColF] = useState({});
-  const [dateF, setDateF] = useState({});
-  const [numF, setNumF] = useState({});
-  const [textF, setTextF] = useState({});
-  const [sort, setSort] = useState({ col: initialSortCol, dir: initialSortDir });
+  
+  // Choose between persistent and transient state
+  const useMaybePersist = (subkey, init) => {
+    if (!persistenceKey) return useState(init);
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    return usePersist(`${persistenceKey}-${subkey}`, init);
+  };
+
+  const [search, setSearch]   = useMaybePersist("search", "");
+  const [page, setPage]       = useState(1); 
+  const [perPage, setPerPage] = useMaybePersist("perPage", settings?.paginationSize || defaultPerPage);
+  
+  // colF needs special handling because Sets don't serialize to JSON
+  const [colFInternal, setColFInternal] = useMaybePersist("colF", {});
+
+  // Convert Arrays from persistence to Sets for the UI
+  const colF = useMemo(() => {
+    const sets = {};
+    Object.keys(colFInternal || {}).forEach(k => {
+      if (Array.isArray(colFInternal[k])) {
+        sets[k] = new Set(colFInternal[k]);
+      } else {
+        sets[k] = colFInternal[k];
+      }
+    });
+    return sets;
+  }, [colFInternal]);
+
+  // Wrapper to convert Sets back to Arrays before saving
+  const setColF = (valOrFn) => {
+    setColFInternal(prev => {
+      const next = typeof valOrFn === "function" ? valOrFn(colF) : valOrFn;
+      if (!next) return {};
+      const persistent = {};
+      Object.keys(next).forEach(k => {
+        if (next[k] instanceof Set) {
+          persistent[k] = Array.from(next[k]);
+        } else {
+          persistent[k] = next[k];
+        }
+      });
+      return persistent;
+    });
+  };
+
+  const [dateF, setDateF]     = useMaybePersist("dateF", {});
+  const [numF, setNumF]       = useMaybePersist("numF", {});
+  const [textF, setTextF]     = useMaybePersist("textF", {});
+  const [sort, setSort]       = useMaybePersist("sort", { col: initialSortCol, dir: initialSortDir });
   const [bulkSel, setBulkSel] = useState(new Set());
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // Reset selection and page when filters or page size change
+    setBulkSel(new Set());
     setPage(1);
-  }, [colF, dateF, numF, textF, perPage]);
+  }, [colF, dateF, numF, textF, perPage, search]);
 
   const toggleSort = (col) => {
     setSort((s) => {
       if (s.col !== col) return { col, dir: "asc" };
       if (s.dir === "asc") return { col, dir: "desc" };
-      return { col: "", dir: "" }; // Cycle back to normal
+      return { col: "", dir: "" }; 
     });
     setPage(1);
   };
@@ -47,7 +90,7 @@ export function useDataTable(initialSortCol = "", initialSortDir = "asc", defaul
   const getPaged = (sortedFilteredArr) => {
     return perPage === "All" 
       ? sortedFilteredArr 
-      : sortedFilteredArr.slice((page - 1) * perPage, page * perPage);
+      : sortedFilteredArr.slice((page - 1) * (Number(perPage) || 50), page * (Number(perPage) || 50));
   };
 
   const toggleBulkRow = (id) => {

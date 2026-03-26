@@ -12,7 +12,10 @@ start "PocketBase Backend" cmd /c "start-pocketbase.bat"
 REM Give PocketBase a brief moment to initialize
 timeout /t 3 /nobreak > nul
 
-REM 2. Start DocVault Frontend in a new window
+REM 2. Start Services
+echo [HELPER] Starting Sharing Microservice...
+start "DocVault Sharing Helper" cmd /c "node sharing-helper.cjs"
+
 echo [FRONTEND] Starting Vite Dev Server...
 start "DocVault Frontend" cmd /c "npm run dev"
 
