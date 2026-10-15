@@ -65,11 +65,11 @@ export function InlineCell({ value, onSave, type = "text", mono, width, placehol
             <select
               autoFocus
               value={v}
-              onChange={(e) => setV(e.target.value)}
-              onBlur={() => commit(v)}
-              onKeyDown={(e) => { if (e.key === "Enter") commit(v); if (e.key === "Escape") cancel(); }}
+              onChange={(e) => { const val = e.target.value; setV(val); commit(val); }}
+              onKeyDown={(e) => { if (e.key === "Escape") cancel(); }}
               className="text-[11px] border border-border-strong rounded bg-surface text-text-primary outline-none px-1.5 py-1 flex-1"
             >
+              <option value="">— Kosong —</option>
               {opts?.map((o) => <option key={o.v ?? o} value={o.v ?? o}>{o.l ?? o}</option>)}
             </select>
           ) : (

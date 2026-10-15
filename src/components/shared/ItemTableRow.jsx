@@ -1,8 +1,9 @@
 import { memo } from "react";
 import { Btn, Ico, IC, SPill } from "../ui";
 import { InlineCell } from "./InlineCell";
-import { fmt, fmtShort, itemNet, itemMargin, getQtyDel, fmtDate } from "../../lib/helpers";
+import { fmt, fmtShort, itemNet, itemMargin, getQtyDel, fmtDate, diffDays, agingColor, agingBg } from "../../lib/helpers";
 import { ITEM_STATUS } from "../../lib/constants";
+import { usePOStore } from "../../store/usePOStore";
 
 /**
  * ItemTableRow - Shared component for PO item rows.
@@ -28,6 +29,8 @@ export const ItemTableRow = memo(function ItemTableRow({
   tdCls = "py-1.5 px-2 border-b border-border-default text-[11px] align-middle",
   showBuyPrice = false,
 }) {
+  const products = usePOStore(s => s.products);
+  const masterProduct = (products || []).find(p => p.name === item.itemName || p.sku === item.itemName);
   const mg = itemMargin(item);
   const net = itemNet(item);
   const qDel = getQtyDel(item.id, dos);
@@ -56,6 +59,15 @@ export const ItemTableRow = memo(function ItemTableRow({
       <td className={tdCls} title={item.itemName}>
         <div className={`font-semibold line-clamp-3 min-w-[120px] max-w-[200px] break-words whitespace-normal leading-snug ${isSub ? "text-[10px] text-text-secondary pl-2" : ""}`}>
           {item.itemName}
+          {masterProduct ? (
+            <div className={`text-[9px] mt-0.5 font-bold flex items-center gap-1 ${masterProduct.stockLevel <= (masterProduct.safetyStock || 0) ? "text-red" : "text-green"}`}>
+               <span className="opacity-70">📦</span> Stock: {masterProduct.stockLevel} {masterProduct.uom}
+            </div>
+          ) : (
+            <div className="text-[9px] mt-0.5 text-text-muted italic flex items-center gap-1">
+              <span className="opacity-50">⚠️</span> Not in catalog
+            </div>
+          )}
           {!isSub && (item.supplierAssignments || []).length > 1 && (
             <span className="ml-1 text-[9px] text-text-muted inline-block">+{(item.supplierAssignments || []).length - 1}</span>
           )}
@@ -130,6 +142,22 @@ export const ItemTableRow = memo(function ItemTableRow({
         />
       </td>
 
+      {/* Aging (NEW: Matches AllItems header) */}
+      <td className={`${tdCls} text-center`}>
+        {po && !["paid", "cancelled"].includes(po.status) ? (
+          (() => {
+            const days = diffDays(po.orderDate);
+            return days >= 0 ? (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" 
+                style={{ color: agingColor(days), background: agingBg(days) }}
+              >
+                {days}h
+              </span>
+            ) : "–";
+          })()
+        ) : "–"}
+      </td>
+
       {/* Note */}
       <td className={tdCls} title={item.notes || ""}>
         <div className="max-w-[140px] whitespace-normal break-words line-clamp-2">
@@ -186,7 +214,12 @@ export const ItemTableRow = memo(function ItemTableRow({
 
       {/* Action Buttons */}
       <td className={`${tdCls} ${stickyR} ${rowBg} !p-[4px_4px]`}>
-        <div className="grid grid-cols-2 gap-1 justify-items-end">
+        <div className="flex gap-1 justify-end items-center">
+          {item.status !== "delivered" && (
+            <Btn size="sm" variant="ghost" title="Mark Delivered" className="!p-0 w-[22px] h-[22px] justify-center" onClick={() => onUpdate({ ...item, status: "delivered" })}>
+              <Ico d={IC.truck} size={11} color="var(--color-brand)" />
+            </Btn>
+          )}
           <Btn size="sm" variant="ghost" title="Edit Item" className="!p-0 w-[22px] h-[22px] justify-center" onClick={() => onEdit(item)}>
             <Ico d={IC.edit} size={10} />
           </Btn>

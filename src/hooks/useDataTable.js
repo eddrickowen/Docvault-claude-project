@@ -13,7 +13,7 @@ export function useDataTable(initialSortCol = "", initialSortDir = "asc", defaul
   };
 
   const [search, setSearch]   = useMaybePersist("search", "");
-  const [page, setPage]       = useState(1); 
+  const [page, setPage]       = useMaybePersist("page", 1); 
   const [perPage, setPerPage] = useMaybePersist("perPage", settings?.paginationSize || defaultPerPage);
   
   // colF needs special handling because Sets don't serialize to JSON

@@ -15,10 +15,17 @@ export const today = () => new Date().toISOString().slice(0, 10);
 export const diffDays = (d) => (d ? Math.floor((Date.now() - new Date(d)) / 864e5) : -1);
 
 /* ── PO Checks ── */
-// Overdue: Date > threshold AND status is ACTIVE (not terminal or draft)
-export const isOverdue = (p, days = 7) =>
-  !["received", "paid", "cancelled"].includes(p.status) && 
-  p.orderDate && diffDays(p.orderDate) >= days;
+// Overdue: Based on item delivery dates instead of PO order date
+export const isOverdue = (p, items = [], days = 0) => {
+  if (["received", "paid", "cancelled", "invoiced"].includes(p.status) && !["ordered", "pending"].includes(p.status)) return false;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  return items
+    .filter((i) => i.poId === p.id && !["delivered", "invoiced", "paid"].includes(i.status))
+    .some((i) => {
+      if (!i.deliveryDate || i.deliveryDate === "dd/mm/yyyy") return false;
+      return diffDays(i.deliveryDate) >= days;
+    });
+};
 export const isIncompletePO = (p) =>
   !p.orderNo || !p.orderNo.trim() || p.orderNo.trim() === "Order" ||
   !p.orderDate || p.orderDate === "dd/mm/yyyy" || !p.company || !p.company.trim();

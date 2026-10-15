@@ -3,21 +3,24 @@
  * Reads from usePOStore directly — no prop drilling.
  */
 import { useState, useEffect } from "react";
-import { Ico, IC, Btn } from "./ui";
+import { Ico, IC, Btn, HelpModal, ErrorBoundary } from "./ui";
 import { usePOStore } from "../store/usePOStore";
 import { ChatWidget } from "./chat/ChatWidget";
 import { ChatSettingsModal } from "./chat/ChatSettingsModal";
+import { NotificationBell } from "./NotificationBell";
 import { VENDOR_NAME, APP_VERSION } from "../lib/constants";
 import { isIncompletePO, today } from "../lib/helpers";
 
 const NAV = [
   { id: "dashboard", label: "Dashboard",        icon: IC.dash  },
+  { id: "products",  label: "Inventory / Stock", icon: IC.box,   kbd: "I" },
   { id: "po",        label: "Purchase Orders",  icon: IC.po,   kbd: "N" },
-  { id: "items",     label: "Semua Item",        icon: IC.box   },
+  { id: "items",     label: "Semua Item",        icon: IC.list },
   { id: "supplier",  label: "Supplier",          icon: IC.users },
   { id: "margin",    label: "Margin Analysis",   icon: IC.stats },
   { id: "ar-aging",  label: "AR Aging Report",   icon: IC.trend },
   { id: "settings",  label: "Settings",          icon: IC.cog   },
+  { id: "activity",  label: "Activity Log",       icon: IC.clock },
 ];
 
 /* ── Class constants ── */
@@ -32,6 +35,7 @@ export function Layout({ view, setView, onJump, onLogout, children }) {
   const [sharing, setSharing] = useState({ active: false, url: "" });
   const [isToggling, setIsToggling] = useState(false);
   const [showChatSettings, setShowChatSettings] = useState(false);
+  const [showHelp,         setShowHelp]         = useState(false);
 
   const todayStr    = today();
   const overduePOs  = pos.filter((p) => {
@@ -77,6 +81,10 @@ export function Layout({ view, setView, onJump, onLogout, children }) {
           searchInput.focus();
           searchInput.select();
         }
+      }
+      if (e.key === "?") {
+        e.preventDefault();
+        setShowHelp((v) => !v);
       }
     };
     document.addEventListener("keydown", h);
@@ -159,66 +167,6 @@ export function Layout({ view, setView, onJump, onLogout, children }) {
 
   return (
     <div className="flex flex-col h-screen w-full">
-      {/* ── Incomplete PO alert ── */}
-      {incompletePOs.length > 0 && !hideIncAlert && (
-        <div className="bg-amber-500 text-white px-4 py-2 flex items-center gap-2.5 text-sm font-semibold shrink-0">
-          <Ico d={IC.warn} size={14} color="#fff" />
-          <span className="flex-1">
-            ⚠ {incompletePOs.length} PO belum lengkap — No. Order / Perusahaan / Tanggal belum diisi!
-          </span>
-          <Btn
-            size="sm" variant="ghost"
-            onClick={() => { 
-              const firstId = incompletePOs[0]?.id;
-              if (onJump && firstId) onJump("po", firstId);
-              else setView("po");
-              setHideIncAlert(true); 
-            }}
-            className="!bg-white/20 !border-white/40 !text-white hover:!bg-white/30"
-          >
-            Lihat PO
-          </Btn>
-          <Btn
-            size="sm" variant="ghost"
-            onClick={() => setHideIncAlert(true)}
-            title="Tutup"
-            className="!bg-transparent !border-transparent !text-white hover:!bg-white/10 !p-1"
-          >
-            <Ico d={IC.close} size={14} />
-          </Btn>
-        </div>
-      )}
-
-      {/* ── Overdue alert ── */}
-      {overduePOs.length > 0 && !hideAlert && (
-        <div className="bg-red-600 text-white px-4 py-2 flex items-center gap-2.5 text-sm font-semibold shrink-0 shadow-sm">
-          <Ico d={IC.warn} size={14} color="#fff" />
-          <span className="flex-1">
-            ⚠ {overduePOs.length} PO OVERDUE — item belum terkirim melewati tanggal delivery!
-          </span>
-          <Btn
-            size="sm" variant="ghost"
-            onClick={() => { 
-              const firstId = overduePOs[0]?.id;
-              if (onJump && firstId) onJump("po", firstId);
-              else setView("po");
-              setHideAlert(true); 
-            }}
-            className="!bg-white/20 !border-white/40 !text-white hover:!bg-white/30"
-          >
-            Lihat PO
-          </Btn>
-          <Btn
-            size="sm" variant="ghost"
-            onClick={() => setHideAlert(true)}
-            title="Tutup Peringatan"
-            className="!bg-transparent !border-transparent !text-white hover:!bg-white/10 !p-1"
-          >
-            <Ico d={IC.close} size={14} />
-          </Btn>
-        </div>
-      )}
-
       {/* ── Main wrapper ── */}
       <div className="flex flex-1 w-full overflow-hidden bg-bg-app">
         {/* ── Sidebar ── */}
@@ -331,6 +279,15 @@ export function Layout({ view, setView, onJump, onLogout, children }) {
                 weekday: "long", day: "numeric", month: "long", year: "numeric",
               })}
             </span>
+            <NotificationBell onJump={onJump || setView} />
+            <Btn
+              size="sm" variant="ghost"
+              onClick={() => setShowHelp(true)}
+              title="Panduan & Shortcut (?)"
+              className="!text-text-muted hover:!text-brand !p-1.5"
+            >
+              <Ico d={IC.help} size={14} />
+            </Btn>
             {onLogout && (
               <Btn
                 size="sm"
@@ -345,6 +302,66 @@ export function Layout({ view, setView, onJump, onLogout, children }) {
             )}
           </div>
 
+          {/* ── Incomplete PO alert ── */}
+          {incompletePOs.length > 0 && !hideIncAlert && (
+            <div className="bg-amber-500 text-white px-4 py-2 flex items-center gap-2.5 text-sm font-semibold shrink-0 shadow-sm z-10 transition-all">
+              <Ico d={IC.warn} size={14} color="#fff" />
+              <span className="flex-1">
+                ⚠ {incompletePOs.length} PO belum lengkap — No. Order / Perusahaan / Tanggal belum diisi!
+              </span>
+              <Btn
+                size="sm" variant="ghost"
+                onClick={() => { 
+                  const firstId = incompletePOs[0]?.id;
+                  if (onJump && firstId) onJump("po", firstId);
+                  else setView("po");
+                  setHideIncAlert(true); 
+                }}
+                className="!bg-white/20 !border-white/40 !text-white hover:!bg-white/30"
+              >
+                Lihat PO
+              </Btn>
+              <Btn
+                size="sm" variant="ghost"
+                onClick={() => setHideIncAlert(true)}
+                title="Tutup"
+                className="!bg-transparent !border-transparent !text-white hover:!bg-white/10 !p-1"
+              >
+                <Ico d={IC.close} size={14} />
+              </Btn>
+            </div>
+          )}
+
+          {/* ── Overdue alert ── */}
+          {overduePOs.length > 0 && !hideAlert && (
+            <div className="bg-red-600 text-white px-4 py-2 flex items-center gap-2.5 text-sm font-semibold shrink-0 shadow-sm z-10 transition-all">
+              <Ico d={IC.warn} size={14} color="#fff" />
+              <span className="flex-1">
+                ⚠ {overduePOs.length} PO OVERDUE — item belum terkirim melewati tanggal delivery!
+              </span>
+              <Btn
+                size="sm" variant="ghost"
+                onClick={() => { 
+                  const firstId = overduePOs[0]?.id;
+                  if (onJump && firstId) onJump("po", firstId);
+                  else setView("po");
+                  setHideAlert(true); 
+                }}
+                className="!bg-white/20 !border-white/40 !text-white hover:!bg-white/30"
+              >
+                Lihat PO
+              </Btn>
+              <Btn
+                size="sm" variant="ghost"
+                onClick={() => setHideAlert(true)}
+                title="Tutup Peringatan"
+                className="!bg-transparent !border-transparent !text-white hover:!bg-white/10 !p-1"
+              >
+                <Ico d={IC.close} size={14} />
+              </Btn>
+            </div>
+          )}
+
           {/* Page content */}
           <div className="flex-1 overflow-hidden flex flex-col min-w-0">
             {children}
@@ -352,13 +369,16 @@ export function Layout({ view, setView, onJump, onLogout, children }) {
         </div>
       </div>
 
-      {/* ── Chat Widget ── */}
-      <ChatWidget onOpenSettings={() => setShowChatSettings(true)} />
+      {/* ── Help Modal ── */}
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
-      {/* ── Chat Settings Modal ── */}
-      {showChatSettings && (
-        <ChatSettingsModal onClose={() => setShowChatSettings(false)} />
-      )}
+      {/* ── Chat Widget ── */}
+      <ErrorBoundary name="Chat" inline>
+        <ChatWidget onOpenSettings={() => setShowChatSettings(true)} />
+        {showChatSettings && (
+          <ChatSettingsModal onClose={() => setShowChatSettings(false)} />
+        )}
+      </ErrorBoundary>
     </div>
   );
 }

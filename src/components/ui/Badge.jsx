@@ -37,15 +37,17 @@ export function SBadge({ status, cfg }) {
  *   cfg      — same config map as SBadge
  *   mini     — smaller variant
  */
-export function SPill({ value, onChange, cfg, mini }) {
+export function SPill({ value, onChange, cfg, mini, micro }) {
   const c = cfg[value] || { color: "#475569", bg: "#f0f4f8", ring: "#e2e8f0" };
 
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`rounded-[5px] font-semibold cursor-pointer outline-none uppercase tracking-wide ${
-        mini ? "px-1 py-0.5 text-[11px] max-w-[90px]" : "px-1.5 py-1 text-xs max-w-[130px]"
+      className={`rounded-[4px] font-semibold cursor-pointer outline-none uppercase tracking-wide ${
+        micro ? "px-0.5 py-0 text-[9px] max-w-[78px]" :
+        mini  ? "px-1 py-0.5 text-[11px] max-w-[90px]" :
+                "px-1.5 py-1 text-xs max-w-[130px]"
       }`}
       style={{ background: c.bg, color: c.color, border: `1px solid ${c.ring}` }}
     >

@@ -9,7 +9,7 @@ const inputCls =
  * SmartDate — hybrid text input + native date picker
  * Accepts DD/MM/YY, DD.MM.YYYY, YYYY-MM-DD etc.
  */
-export function SmartDate({ value, onChange, onCancel, placeholder, className }) {
+export function SmartDate({ value, onChange, onCancel, placeholder, disabled, className }) {
   const [raw, setRaw] = useState("");
   const [focused, setFocused] = useState(false);
   const pickerRef = useRef();
@@ -44,6 +44,7 @@ export function SmartDate({ value, onChange, onCancel, placeholder, className })
         value={display}
         onChange={(e) => setRaw(e.target.value)}
         onFocus={() => {
+          if (disabled) return;
           setFocused(true);
           setRaw(value ? fmtDate(value) : "");
         }}
@@ -54,13 +55,15 @@ export function SmartDate({ value, onChange, onCancel, placeholder, className })
           }, 200);
         }}
         onKeyDown={handleKeyDown}
+        disabled={disabled}
         placeholder={placeholder || "Pilih tanggal..."}
-        className={`${inputCls} pr-[30px] cursor-text ${className || ""}`}
+        className={`${inputCls} pr-[30px] cursor-text ${disabled ? "opacity-40 cursor-not-allowed" : ""} ${className || ""}`}
       />
       <button
         type="button"
-        onClick={() => pickerRef.current?.showPicker?.() || pickerRef.current?.click()}
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-text-muted flex p-0.5"
+        onClick={() => { if (!disabled) pickerRef.current?.showPicker?.() || pickerRef.current?.click(); }}
+        disabled={disabled}
+        className={`absolute right-1.5 top-1/2 -translate-y-1/2 bg-transparent border-none flex p-0.5 ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer text-text-muted"}`}
         title="Buka kalender"
       >
         <Ico d={IC.cal} size={14} color={focused ? "var(--color-brand)" : "var(--color-text-muted)"} />
@@ -69,7 +72,8 @@ export function SmartDate({ value, onChange, onCancel, placeholder, className })
         ref={pickerRef}
         type="date"
         value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => { if (!disabled) onChange(e.target.value); }}
+        disabled={disabled}
         className="absolute right-0 top-0 opacity-0 w-[30px] h-full border-none cursor-pointer -z-[1]"
       />
     </div>

@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect, Fragment } from "react";
 import { Btn, Ico, IC, Modal, SPill, FIn, FSel } from "../components/ui";
 import { Pagination, DateRangeFilter, NumberRangeFilter, TextFilter, ColFilter, InlineCell, CopyTSVButton, DataTableToolbar, DataTableHeader, ItemTableRow } from "../components/shared";
 import { ItemForm, BulkEditModal } from "../components/forms";
-import { useConfirm, useDataTable } from "../hooks";
+import { useConfirm, useDataTable, useScrollRestore } from "../hooks";
+import { useRef } from "react";
 import { usePOStore } from "../store/usePOStore";
 import {
   itemNet, itemMargin, itemBuy, getQtyDel, fmtDate, fmtShort, fmt, today,
@@ -37,6 +38,8 @@ export function AllItems({ onJump }) {
   const [isGrouped,   setIsGrouped]   = useState(true);
   const [expGrp,      setExpGrp]      = useState(new Set());
   const { ask, ConfirmModal }   = useConfirm();
+  const tableRef = useRef(null);
+  useScrollRestore("all-items", tableRef);
 
   // Auto-ungroup if filters are active
   useEffect(() => {
@@ -284,7 +287,7 @@ export function AllItems({ onJump }) {
       />
 
       {/* Table */}
-      <div className="overflow-x-auto flex-1 w-full">
+      <div className="overflow-x-auto flex-1 w-full" ref={tableRef}>
         <table className="w-full border-collapse min-w-[1100px]">
           <DataTableHeader
             thCls={thCls}

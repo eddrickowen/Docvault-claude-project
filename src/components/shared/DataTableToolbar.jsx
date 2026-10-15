@@ -13,7 +13,7 @@ export function DataTableToolbar({
 }) {
   return (
     <div className="flex gap-2 py-3 px-4 border-b border-border-default flex-wrap items-center shrink-0 bg-surface">
-      <div className="relative flex-1 min-w-[160px] max-w-[300px]">
+      <div className="relative flex-[2] min-w-[200px] max-w-[420px]">
         <FIn
           value={search}
           onChange={(v) => { setSearch(v); setPage(1); }}

@@ -5,3 +5,5 @@ export { SupplierPage } from "./SupplierPage";
 export { MarginAnalysis } from "./MarginAnalysis";
 export { ARAgingReport } from "./ARAgingReport";
 export { Settings } from "./Settings";
+export { Products } from "./Products";
+export { ActivityLog } from "./ActivityLog";

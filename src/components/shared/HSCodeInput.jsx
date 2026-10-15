@@ -17,7 +17,7 @@ export function HSCodeInput({ value, onChange, placeholder, className, hsDB = []
   const wrapRef = useRef();
   const inputRef = useRef();
   const dropRef = useRef();
-  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 360 });
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 320 });
 
   const filtered = useMemo(() => {
     const s = (q || value || "").toLowerCase().trim();
@@ -28,11 +28,13 @@ export function HSCodeInput({ value, onChange, placeholder, className, hsDB = []
   const openDrop = () => {
     const r = wrapRef.current?.getBoundingClientRect();
     if (r) {
-      setDropPos({
-        top: r.bottom + 3,
-        left: Math.min(r.left, window.innerWidth - Math.max(r.width, 400)),
-        width: Math.max(r.width, 400),
-      });
+      const minW    = 300;
+      const maxW    = Math.min(Math.max(r.width, minW), window.innerWidth - 16);
+      const safeLeft = Math.min(r.left, window.innerWidth - maxW - 8);
+      // Flip above if not enough space below (need ~260px for dropdown)
+      const spaceBelow = window.innerHeight - r.bottom;
+      const top = spaceBelow < 270 ? r.top - 270 : r.bottom + 3;
+      setDropPos({ top, left: Math.max(8, safeLeft), width: maxW });
     }
     setOpen(true);
   };
@@ -73,7 +75,7 @@ export function HSCodeInput({ value, onChange, placeholder, className, hsDB = []
               setOpen(false);
             }, 150);
           }}
-          placeholder={placeholder || "8481.20.00 – ketik untuk cari"}
+          placeholder={placeholder || "Ketik HS Code..."}
           className={`${inputCls} pr-7 ${className || ""}`}
         />
         <button

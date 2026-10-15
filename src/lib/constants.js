@@ -209,3 +209,16 @@ export const INIT_DOS = [
 
 /* ── HS Code placeholder database ── */
 export const INIT_HS_DB = []; // user manages via Settings
+
+/**
+ * EMPTY_STORE_STATE — the clean slate applied when a user logs out.
+ * Resets all data arrays and reference data; _loaded is set separately.
+ * Does NOT include functions or undo history (those are structural, not data).
+ */
+export const EMPTY_STORE_STATE = {
+  pos: [], items: [], suppliers: [], dos: [], products: [],
+  companies: [], zoneTypes: [], hsDB: [], uom: UOM_OPTIONS,
+  settings: INIT_SETTINGS,
+  _toast: null, jumpTargetPOId: null, triggerNewPO: false,
+  history: [], historyIndex: -1,
+};

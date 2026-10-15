@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Accordion, Btn, Ico, IC, FGrid, FF, FIn, FTa, FSel, NumInput, Divider } from "../ui";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Accordion, Btn, Ico, IC, FGrid, FF, FIn, FTa, FSel, NumInput, Divider, SearchInput } from "../ui";
 import { SmartDate } from "../shared";
 import { HSCodeInput } from "../shared";
 import { SupplierAssignments } from "./SupplierAssignments";
@@ -7,12 +7,20 @@ import {
   uid, today, getQtyDel, fmt, itemNet, itemBuy,
 } from "../../lib/helpers";
 import { UOM_OPTIONS, ITEM_STATUS, mkItem } from "../../lib/constants";
+import { usePOStore } from "../../store/usePOStore";
 
 /**
  * ItemForm — create or edit a PO line item.
  * Uses Accordion sections for Detail, Price, Supplier, Delivery.
  */
 export function ItemForm({ initial, poId, zoneTypes, suppliers, dos, hsDB = [], onSave, onClose, onAddSupplier }) {
+  const products = usePOStore(s => s.products);
+  const productOptions = useMemo(
+    () => products.map(p => ({ v: p.id, l: `[${p.sku}] ${p.name}` })),
+    [products]
+  );
+  const productMap = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
+
   const [f, setF] = useState(() => ({
     ...mkItem(),
     ...initial,
@@ -77,8 +85,26 @@ export function ItemForm({ initial, poId, zoneTypes, suppliers, dos, hsDB = [], 
       {/* Detail Item */}
       <Accordion title="Detail Item" icon={IC.box} defaultOpen warning={!f.itemName.trim()}>
         <FGrid cols={2}>
+          <FF label="Pilih dari Master Produk" span={2}>
+            <SearchInput
+              autoFocus
+              placeholder="Cari SKU atau Nama Produk..."
+              options={productOptions}
+              onChange={(productId) => {
+                const prod = productMap.get(productId);
+                if (!prod) return;
+                setF(prev => ({
+                  ...prev,
+                  itemName: prod.name,
+                  unitPrice: prod.unitPrice || prev.unitPrice,
+                  unit: prod.uom || prev.unit,
+                  desc: prod.desc || prev.desc,
+                }));
+              }}
+            />
+          </FF>
           <FF label="Nama Item" span={2} required>
-            <FIn value={f.itemName} onChange={set("itemName")} placeholder="Nama item / part number" autoFocus />
+            <FIn value={f.itemName} onChange={set("itemName")} placeholder="Nama item / part number" />
           </FF>
           <FF label="Qty">
             <NumInput value={f.qty} onChange={set("qty")} min={0} />

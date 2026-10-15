@@ -39,13 +39,13 @@ export const useChatStore = create((set, get) => ({
     try {
       // Settings
       try {
-        const recs = await pb.collection("chat_settings").getFullList({ filter: `user.id = "${userId}"` });
+        const recs = await pb.collection("chat_settings").getFullList({ filter: `user = "${userId}"` });
         if (recs.length > 0) set({ settings: { ...get().settings, ...recs[0] } });
       } catch { /* collection may not exist */ }
 
       // API Keys
       try {
-        const keys = await pb.collection("chat_api_keys").getFullList({ filter: `user.id = "${userId}"` });
+        const keys = await pb.collection("chat_api_keys").getFullList({ filter: `user = "${userId}"` });
         set({ apiKeys: keys });
         if (keys.some((k) => k.provider?.toLowerCase() === "gemini")) get().refreshModels();
       } catch { /* collection may not exist */ }
@@ -53,7 +53,7 @@ export const useChatStore = create((set, get) => ({
       // Conversations (last 20)
       try {
         const convos = await pb.collection("chat_conversations").getList(1, 20, {
-          filter: `user.id = "${userId}"`,
+          filter: `user = "${userId}"`,
           sort: "-updated",
         });
         set({ conversations: convos.items });
@@ -173,7 +173,7 @@ export const useChatStore = create((set, get) => ({
       const overdueByYear = [currentYear, currentYear - 1, currentYear - 2]
         .map((yr) => {
           const yPos = pos.filter((p) => p.orderDate && new Date(p.orderDate).getFullYear() === yr);
-          return `${yr}:${yPos.filter((p) => isOverdue(p, 7)).length}`;
+          return `${yr}:${yPos.filter((p) => isOverdue(p, items, 7)).length}`;
         })
         .join(", ");
 

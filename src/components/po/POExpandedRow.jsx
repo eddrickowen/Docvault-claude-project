@@ -27,6 +27,7 @@ export function POExpandedRow({
   settings,
   hsDB = [],
   onUpdateItem,
+  onUpdatePO,
   onAddItem,
   onOpenDO,
   onAddSupplier,
@@ -83,6 +84,22 @@ export function POExpandedRow({
               📁 Drive
             </a>
           )}
+          <span className="text-[11px] text-text-muted">Zone:</span>
+          <select
+            value={po.zoneType || ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              onUpdatePO({ ...po, zoneType: v });
+              poItems.forEach((item) => onUpdateItem({ ...item, zoneType: v }));
+              toast(`✓ Zone "${v || "–"}" diterapkan ke ${poItems.length} item`);
+            }}
+            className="border border-border-default bg-surface rounded-[5px] text-[11px] px-2 py-0.5 font-semibold cursor-pointer focus:outline-none hover:border-brand-mid transition-colors"
+          >
+            <option value="">— Tidak ada —</option>
+            {(zoneTypes || []).map((z) => (
+              <option key={z} value={z}>{z}</option>
+            ))}
+          </select>
         </div>
         <div className="flex gap-1.5 flex-wrap">
           {bulkItems.size > 0 && (
@@ -177,6 +194,7 @@ export function POExpandedRow({
                 <th className={thCls}>Delivery</th>
                 <th className={thCls}>Invoice</th>
                 <th className={thCls}>Zone</th>
+                <th className={thCls}>Aging</th>
                 <th className={thCls}>Note</th>
                 <th className={thCls}>DO</th>
                 <th className={`${thCls} w-24 text-center ${stickyR} bg-surface-alt z-[2]`} />
@@ -209,6 +227,7 @@ export function POExpandedRow({
                   {poItems.reduce((s, i) => s + (Number(i.qty) || 0), 0)}
                 </td>
                 <td className={tdCls} />
+                <td className={tdCls} />
                 <td className={`${tdCls} font-mono font-bold text-brand`}>
                   {fmt(poItems.reduce((s, i) => s + itemNet(i), 0))}
                 </td>
@@ -219,7 +238,7 @@ export function POExpandedRow({
                     return s + (m || 0);
                   }, 0))}
                 </td>
-                <td colSpan={6} className={tdCls} />
+                <td colSpan={8} className={tdCls} />
               </tr>
             </tfoot>
           </table>
@@ -318,6 +337,7 @@ POExpandedRow.propTypes = {
   settings: PropTypes.object,
   hsDB: PropTypes.array,
   onUpdateItem: PropTypes.func.isRequired,
+  onUpdatePO: PropTypes.func.isRequired,
   onAddItem: PropTypes.func.isRequired,
   onOpenDO: PropTypes.func.isRequired,
   onAddSupplier: PropTypes.func.isRequired,

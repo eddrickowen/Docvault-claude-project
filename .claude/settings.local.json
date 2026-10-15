@@ -27,7 +27,12 @@
       "Bash(tail -c 200 \"D:/BACKUP INUL WINDOWS \\(2026\\)/Music/docvault/PURCHASE_ORDER_LIST v3.2 \\(belum di normalisasi\\) - PO_ITEM_LIST.tsv\")",
       "Bash(tail -c 200 \"D:/BACKUP INUL WINDOWS \\(2026\\)/Music/docvault/src/PURCHASE_ORDER_LIST v3.2 \\(belum di normalisasi\\) - PO_ITEM_LIST.csv\")",
       "Bash(cd:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(tail:*)",
+      "Bash(node:*)",
+      "Bash(node -e \":*)",
+      "Bash(cat \"D:/BACKUP INUL WINDOWS \\(2026\\)/Music/docvault/vite.config.js\")",
+      "Bash(cat \"D:/BACKUP INUL WINDOWS \\(2026\\)/Music/docvault/vite.config.ts\")"
     ],
     "deny": [],
     "ask": []

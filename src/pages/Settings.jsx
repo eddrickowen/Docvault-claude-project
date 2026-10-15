@@ -22,6 +22,50 @@ const Toggle = ({ checked, onChange, label, hint }) => (
   </label>
 );
 
+/* ── Tombol reorder kolom Excel (▴ / ▾) ── */
+const ReorderBtn = ({ onClick, disabled, dir }) => (
+  <button
+    type="button"
+    disabled={disabled}
+    onClick={onClick}
+    title={dir === "up" ? "Geser ke atas" : "Geser ke bawah"}
+    className="text-[14px] leading-none hover:text-brand disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-text-secondary transition-colors px-0.5"
+  >
+    {dir === "up" ? "▴" : "▾"}
+  </button>
+);
+
+/* ── Kartu kolom Excel dengan toggle + reorder (dipakai 2x) ── */
+const ExcelColCard = ({ col, idx, total, onToggle, onMoveUp, onMoveDown }) => (
+  <div className={`flex items-center gap-3 py-2 px-3 rounded-md border transition-all ${col.enabled ? "border-brand-mid bg-brand-soft shadow-sm" : "border-border-default bg-surface-alt opacity-75"}`}>
+    <div className="flex items-center justify-center w-5 h-5 rounded-full bg-surface text-[10px] font-bold text-text-muted border border-border-strong shrink-0">{idx + 1}</div>
+    <Toggle checked={col.enabled} onChange={onToggle} label={col.label} />
+    <div className="flex flex-col gap-0.5 ml-auto border-l border-border-strong pl-2 shrink-0">
+      <ReorderBtn dir="up"   disabled={idx === 0}         onClick={onMoveUp} />
+      <ReorderBtn dir="down" disabled={idx === total - 1} onClick={onMoveDown} />
+    </div>
+  </div>
+);
+
+/* ── Baris input + tombol Tambah (dipakai 3x) ── */
+const AddItemRow = ({ value, onChange, onAdd, placeholder, withIcon = false }) => (
+  <div className="flex gap-2">
+    <div className="flex-1 relative">
+      {withIcon && (
+        <Ico d={IC.plus} size={12} color="var(--color-text-muted)" className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+      )}
+      <FIn
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={`!py-1.5 ${withIcon ? "pl-8" : ""}`}
+        onKeyDown={(e) => e.key === "Enter" && onAdd()}
+      />
+    </div>
+    <Btn onClick={onAdd} variant="secondary" size="sm">Tambah</Btn>
+  </div>
+);
+
 export function Settings() {
   const { settings, companies, zoneTypes, hsDB, uom, saveSettings, saveCompanies, saveZoneTypes, saveHsDB, saveUom, toast } = usePOStore();
 
@@ -349,13 +393,7 @@ export function Settings() {
                   ))}
                   {(cos || []).length === 0 && <span className="text-sm text-text-muted py-2">Belum ada data perusahaan.</span>}
                 </div>
-                <div className="flex gap-2">
-                  <div className="flex-1 relative">
-                    <Ico d={IC.plus} size={12} color="var(--color-text-muted)" className="absolute left-3 top-1/2 -translate-y-1/2" />
-                    <FIn value={newCo} onChange={setNewCo} placeholder="Tambahkan perusahaan baru..." className="pl-8 !py-1.5" onKeyDown={(e) => e.key === "Enter" && addCo()} />
-                  </div>
-                  <Btn onClick={addCo} variant="secondary" size="sm">Tambah</Btn>
-                </div>
+                <AddItemRow value={newCo} onChange={setNewCo} onAdd={addCo} placeholder="Tambahkan perusahaan baru..." withIcon />
               </div>
 
               <div className={cardCls}>
@@ -376,10 +414,7 @@ export function Settings() {
                     </div>
                   ))}
                 </div>
-                <div className="flex gap-2">
-                  <FIn value={newUom} onChange={setNewUom} placeholder="UOM Baru (Pcs, Box...)" className="!py-1.5" onKeyDown={(e) => e.key === "Enter" && addUom()} />
-                  <Btn onClick={addUom} variant="secondary" size="sm">Tambah</Btn>
-                </div>
+                <AddItemRow value={newUom} onChange={setNewUom} onAdd={addUom} placeholder="UOM Baru (Pcs, Box...)" />
               </div>
 
               <div className={cardCls}>
@@ -396,13 +431,7 @@ export function Settings() {
                   ))}
                   {(zones || []).length === 0 && <span className="text-sm text-text-muted py-2">Belum ada daftar zone.</span>}
                 </div>
-                <div className="flex gap-2">
-                  <div className="flex-1 relative">
-                    <Ico d={IC.plus} size={12} color="var(--color-text-muted)" className="absolute left-3 top-1/2 -translate-y-1/2" />
-                    <FIn value={newZone} onChange={setNewZone} placeholder="Tambahkan zona baru..." className="pl-8" onKeyDown={(e) => e.key === "Enter" && addZone()} />
-                  </div>
-                  <Btn onClick={addZone} variant="secondary">Tambah</Btn>
-                </div>
+                <AddItemRow value={newZone} onChange={setNewZone} onAdd={addZone} placeholder="Tambahkan zona baru..." withIcon />
               </div>
             </div>
           )}
@@ -444,14 +473,12 @@ export function Settings() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {excelCols.map((c, i) => (
-                    <div key={c.key} className={`flex items-center gap-3 py-2 px-3 rounded-md border transition-all ${c.enabled ? "border-brand-mid bg-brand-soft shadow-sm" : "border-border-default bg-surface-alt opacity-75"}`}>
-                      <div className="flex items-center justify-center w-5 h-5 rounded-full bg-surface text-[10px] font-bold text-text-muted border border-border-strong shrink-0">{i + 1}</div>
-                      <Toggle checked={c.enabled} onChange={() => setExcelCols((p) => p.map((x) => x.key === c.key ? { ...x, enabled: !x.enabled } : x))} label={c.label} />
-                      <div className="flex flex-col gap-0.5 ml-auto border-l border-border-strong pl-2 shrink-0">
-                        <button type="button" disabled={i === 0} onClick={() => setExcelCols((p) => { const a = [...p]; [a[i-1],a[i]]=[a[i],a[i-1]]; return a; })} className="text-[14px] leading-none hover:text-brand disabled:opacity-30 disabled:hover:text-text-secondary transition-colors pb-0.5">▴</button>
-                        <button type="button" disabled={i === excelCols.length-1} onClick={() => setExcelCols((p) => { const a = [...p]; [a[i],a[i+1]]=[a[i+1],a[i]]; return a; })} className="text-[14px] leading-none hover:text-brand disabled:opacity-30 disabled:hover:text-text-secondary transition-colors pt-0.5">▾</button>
-                      </div>
-                    </div>
+                    <ExcelColCard
+                      key={c.key} col={c} idx={i} total={excelCols.length}
+                      onToggle={() => setExcelCols((p) => p.map((x) => x.key === c.key ? { ...x, enabled: !x.enabled } : x))}
+                      onMoveUp={() => setExcelCols((p) => { const a = [...p]; [a[i-1],a[i]]=[a[i],a[i-1]]; return a; })}
+                      onMoveDown={() => setExcelCols((p) => { const a = [...p]; [a[i],a[i+1]]=[a[i+1],a[i]]; return a; })}
+                    />
                   ))}
                 </div>
               </div>
@@ -462,14 +489,12 @@ export function Settings() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {excelPOCols.map((c, i) => (
-                    <div key={c.key} className={`flex items-center gap-3 py-2 px-3 rounded-md border transition-all ${c.enabled ? "border-brand-mid bg-brand-soft shadow-sm" : "border-border-default bg-surface-alt opacity-75"}`}>
-                      <div className="flex items-center justify-center w-5 h-5 rounded-full bg-surface text-[10px] font-bold text-text-muted border border-border-strong shrink-0">{i + 1}</div>
-                      <Toggle checked={c.enabled} onChange={() => setExcelPOCols((p) => p.map((x) => x.key === c.key ? { ...x, enabled: !x.enabled } : x))} label={c.label} />
-                      <div className="flex flex-col gap-0.5 ml-auto border-l border-border-strong pl-2 shrink-0">
-                        <button type="button" disabled={i === 0} onClick={() => setExcelPOCols((p) => { const a = [...p]; [a[i-1],a[i]]=[a[i],a[i-1]]; return a; })} className="text-[14px] leading-none hover:text-brand disabled:opacity-30 border-none bg-transparent">▴</button>
-                        <button type="button" disabled={i === excelPOCols.length-1} onClick={() => setExcelPOCols((p) => { const a = [...p]; [a[i],a[i+1]]=[a[i+1],a[i]]; return a; })} className="text-[14px] leading-none hover:text-brand disabled:opacity-30 border-none bg-transparent">▾</button>
-                      </div>
-                    </div>
+                    <ExcelColCard
+                      key={c.key} col={c} idx={i} total={excelPOCols.length}
+                      onToggle={() => setExcelPOCols((p) => p.map((x) => x.key === c.key ? { ...x, enabled: !x.enabled } : x))}
+                      onMoveUp={() => setExcelPOCols((p) => { const a = [...p]; [a[i-1],a[i]]=[a[i],a[i-1]]; return a; })}
+                      onMoveDown={() => setExcelPOCols((p) => { const a = [...p]; [a[i],a[i+1]]=[a[i+1],a[i]]; return a; })}
+                    />
                   ))}
                 </div>
               </div>
@@ -493,7 +518,7 @@ export function Settings() {
                   <FIn value={hsSearch} onChange={setHsSearch} placeholder="Cari HS Code atau Deskripsi..." className="flex-1 !py-1 text-xs" />
                 </div>
                 <div className="flex gap-2 items-center">
-                  <FIn value={newHsCode} onChange={setNewHsCode} placeholder="Ketik Kode (Mis: 8481.20)" className="w-[180px] font-mono text-sm" />
+                  <FIn value={newHsCode} onChange={setNewHsCode} placeholder="8481.20.00" className="w-[160px] min-w-[140px] font-mono text-sm" />
                   <FIn value={newHsDesc} onChange={setNewHsDesc} placeholder="Deskripsi/Nama Barang Singkat..." className="flex-1" onKeyDown={(e) => e.key === "Enter" && addHs()} />
                   <Btn onClick={addHs} size="sm"><Ico d={IC.plus} size={11} /> Tambah Code</Btn>
                 </div>
@@ -503,7 +528,7 @@ export function Settings() {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-surface-alt border-b border-border-strong sticky top-0">
                     <tr>
-                      <th className="py-2 px-4 text-xs font-bold text-text-secondary w-[180px]">HS Code</th>
+                      <th className="py-2 px-4 text-xs font-bold text-text-secondary w-[200px]">HS Code</th>
                       <th className="py-2 px-4 text-xs font-bold text-text-secondary">Deskripsi Klasifikasi</th>
                       <th className="py-2 px-4 w-[60px]"></th>
                     </tr>

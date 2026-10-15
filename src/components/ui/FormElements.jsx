@@ -50,6 +50,7 @@ export function FIn({
   type = "text",
   placeholder,
   readOnly,
+  disabled,
   min,
   max,
   className = "",
@@ -72,12 +73,13 @@ export function FIn({
       onBlur={onBlur}
       placeholder={placeholder}
       readOnly={readOnly}
+      disabled={disabled}
       min={min}
       max={max}
       onKeyDown={handleKeyDown}
       autoFocus={autoFocus}
       style={style}
-      className={`${inputBase} ${readOnly ? readOnlyExtra : ""} ${className}`}
+      className={`${inputBase} ${readOnly || disabled ? readOnlyExtra : ""} ${disabled ? "opacity-40 cursor-not-allowed" : ""} ${className}`}
     />
   );
 }
@@ -85,13 +87,14 @@ export function FIn({
 /**
  * Select
  */
-export function FSel({ value, onChange, onBlur, options, placeholder, className = "" }) {
+export function FSel({ value, onChange, onBlur, options, placeholder, disabled, className = "" }) {
   return (
     <select
       value={value ?? ""}
       onChange={(e) => onChange?.(e.target.value)}
       onBlur={onBlur}
-      className={`${inputBase} cursor-pointer ${className}`}
+      disabled={disabled}
+      className={`${inputBase} cursor-pointer ${disabled ? "opacity-40 cursor-not-allowed" : ""} ${className}`}
     >
       <option value="">{placeholder || "— Pilih —"}</option>
       {options.map((o) => (
@@ -181,10 +184,11 @@ export function NumInput({
 /**
  * SearchInput — searchable input with dropdown suggestions.
  */
-export function SearchInput({ value, onChange, options, placeholder, className = "", onKeyDown }) {
+export function SearchInput({ value, onChange, options, placeholder, className = "", onKeyDown, autoFocus }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [idx, setIdx] = useState(0);
+  const [arrowUsed, setArrowUsed] = useState(false);
 
   const filtered = options.filter(o => 
     (o.l || o).toLowerCase().includes(search.toLowerCase())
@@ -195,18 +199,26 @@ export function SearchInput({ value, onChange, options, placeholder, className =
     setSearch("");
     setOpen(false);
     setIdx(0);
+    setArrowUsed(false);
   };
 
   const handleKeyDown = (e) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      setArrowUsed(true);
       setIdx(p => (p + 1) % Math.max(1, filtered.length));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      setArrowUsed(true);
       setIdx(p => (p - 1 + filtered.length) % Math.max(1, filtered.length));
-    } else if (e.key === "Enter" || e.key === "Tab") {
-      if (open && filtered[idx]) {
+    } else if (e.key === "Enter") {
+      if (open && filtered[idx] && arrowUsed) {
         e.preventDefault();
+        select(filtered[idx]);
+        return; // Important: prevent triggering the parent's generic Enter handler when picking a suggestion
+      }
+    } else if (e.key === "Tab") {
+      if (open && filtered[idx] && arrowUsed) {
         select(filtered[idx]);
       }
     } else if (e.key === "Escape") {
@@ -224,14 +236,17 @@ export function SearchInput({ value, onChange, options, placeholder, className =
           setSearch(e.target.value);
           if (!open) setOpen(true);
           setIdx(0);
+          setArrowUsed(false);
         }}
         onFocus={() => {
           setSearch("");
           setOpen(true);
+          setArrowUsed(false);
         }}
         onBlur={() => setTimeout(() => setOpen(false), 200)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
+        autoFocus={autoFocus}
         className={`${inputBase} ${className}`}
       />
       {open && filtered.length > 0 && (

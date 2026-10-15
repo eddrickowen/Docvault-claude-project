@@ -71,6 +71,7 @@ export const collections = {
   zoneTypes: () => pb.collection('zone_types'),
   settings: () => pb.collection('settings'),
   hsCodes: () => pb.collection('hs_codes'),
+  products: () => pb.collection('products'),
 };
 
 /**
@@ -143,6 +144,22 @@ export const dbHelpers = {
       return { success: false, error: error.message };
     }
   },
+};
+
+/**
+ * Convert a PocketBase error into a user-friendly Indonesian message.
+ * Handles the most common HTTP errors so catch blocks stay readable.
+ *
+ * @param {Error}  err     — the caught error (may have .status from PocketBase SDK)
+ * @param {string} action  — short verb shown in the message, e.g. "hapus PO"
+ * @returns {string}
+ */
+export const pbError = (err, action) => {
+  const status = err?.status ?? err?.response?.code;
+  if (status === 403) return `⛔ Akses ditolak — hanya admin yang bisa ${action}`;
+  if (status === 404) return `⚠️ Data tidak ditemukan saat ${action}`;
+  if (status === 400) return `⚠️ Data tidak valid saat ${action}: ${err.message}`;
+  return `⚠️ Gagal ${action}: ${err?.message || "Error tidak diketahui"}`;
 };
 
 /**

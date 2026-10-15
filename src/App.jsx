@@ -20,12 +20,17 @@ import {
   MarginAnalysis,
   ARAgingReport,
   Settings,
+  Products,
+  ActivityLog,
 } from "./pages";
 
 export default function App() {
   const { init, _loaded, _toast, setJumpTargetPO } = usePOStore();
   const { init: initChat } = useChatStore();
   const [view, setView] = useState("dashboard");
+  // Lazy-mount: pages mount on first visit and stay mounted (hidden) after.
+  // This makes tab switching instant — no unmount/remount, no re-running effects.
+  const [mounted, setMounted] = useState(() => new Set(["dashboard"]));
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const { show: toast, Toast } = useToast();
@@ -49,10 +54,19 @@ export default function App() {
     if (_toast?.msg) toast(_toast.msg);
   }, [_toast, toast]);
 
+  /* ── Navigate: mount page on first visit, then just switch view ── */
+  const navigateTo = useCallback((v) => {
+    setMounted((prev) => {
+      if (prev.has(v)) return prev;
+      return new Set([...prev, v]);
+    });
+    setView(v);
+  }, []);
+
   /* ── Jump to PO with highlight ── */
   const handleJump = useCallback(
     (v = "po", id) => {
-      setView(v);
+      navigateTo(v);
       if (v === "po" && id) {
         setJumpTargetPO(id);
       } else if (id) {
@@ -66,7 +80,7 @@ export default function App() {
         }, 300);
       }
     },
-    [setJumpTargetPO],
+    [navigateTo, setJumpTargetPO],
   );
 
   /* ── Handle successful login ── */
@@ -79,9 +93,11 @@ export default function App() {
 
   /* ── Handle logout ── */
   const handleLogout = () => {
+    // Unsubscribe from WebSocket + clear store data before invalidating auth
+    usePOStore.getState().logout();
     pb.authStore.clear();
     setAuthenticated(false);
-    window.location.reload(); // Reload to clear state
+    window.location.reload();
   };
 
   // Show checking auth screen
@@ -124,19 +140,33 @@ export default function App() {
     );
   }
 
-  // Main app
+  // Each page: id, error label, element.
+  // Static key on ErrorBoundary = never remounts on tab switch.
+  // The div uses CSS to show/hide — component state is preserved.
+  const PAGES = [
+    { id: "dashboard", name: "Dashboard",         el: <Dashboard onJump={handleJump} /> },
+    { id: "po",        name: "Purchase Orders",   el: <POList /> },
+    { id: "items",     name: "Semua Item",        el: <AllItems onJump={handleJump} /> },
+    { id: "supplier",  name: "Supplier",          el: <SupplierPage onJump={handleJump} /> },
+    { id: "margin",    name: "Margin Analysis",   el: <MarginAnalysis /> },
+    { id: "ar-aging",  name: "AR Aging Report",   el: <ARAgingReport onJump={handleJump} /> },
+    { id: "settings",  name: "Settings",          el: <Settings /> },
+    { id: "products",  name: "Inventory / Stock", el: <Products /> },
+    { id: "activity",  name: "Activity Log",      el: <ActivityLog /> },
+  ];
+
   return (
-    <ErrorBoundary>
-      <Layout view={view} setView={setView} onJump={handleJump} onLogout={handleLogout}>
-        <Toast />
-        {view === "dashboard" && <Dashboard onJump={handleJump} />}
-        {view === "po"        && <POList />}
-        {view === "items"     && <AllItems onJump={handleJump} />}
-        {view === "supplier"  && <SupplierPage onJump={handleJump} />}
-        {view === "margin"    && <MarginAnalysis />}
-        {view === "ar-aging"  && <ARAgingReport onJump={handleJump} />}
-        {view === "settings"  && <Settings />}
-      </Layout>
-    </ErrorBoundary>
+    <Layout view={view} setView={navigateTo} onJump={handleJump} onLogout={handleLogout}>
+      <Toast />
+      {PAGES.map(({ id, name, el }) =>
+        mounted.has(id) ? (
+          <ErrorBoundary key={id} name={name}>
+            <div className={view === id ? "flex flex-col h-full overflow-hidden" : "hidden"}>
+              {el}
+            </div>
+          </ErrorBoundary>
+        ) : null
+      )}
+    </Layout>
   );
 }
